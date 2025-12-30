@@ -1,0 +1,24 @@
+[package]
+name = "rustris"
+version = "0.1.0"
+edition = "2021"
+license = "CC-BY-NC-SA-4.0"
+
+[dependencies]
+tauri = { version = "2.9.5", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "5.0"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tar = "0.4"
+flate2 = "1.0"
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+diesel = { version = "2.2", features = ["sqlite"] }
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+
+[build-dependencies]
+tauri-build = { version = "2.5.3" }
