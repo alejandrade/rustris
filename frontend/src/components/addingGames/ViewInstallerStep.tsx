@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Typography, Button, TextField, Chip } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
+import yaml from "js-yaml";
 import type { LutrisInstaller } from "../../types/lutris";
 
 interface ViewInstallerStepProps {
@@ -12,7 +13,7 @@ interface ViewInstallerStepProps {
 
 function ViewInstallerStep({ installer, onBack, onSave }: ViewInstallerStepProps) {
   const [scriptContent, setScriptContent] = useState(
-    installer.content || JSON.stringify(installer.script, null, 2)
+    installer.content || yaml.dump(installer.script, { indent: 2, lineWidth: -1 })
   );
 
   const handleSave = () => {

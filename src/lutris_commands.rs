@@ -1,5 +1,6 @@
 /// Lutris domain commands - commands that interact with Lutris configuration
 use crate::lutris_cli;
+use crate::lutris_util::LutrisConfig;
 use crate::rustris_paths;
 use std::fs;
 
@@ -125,10 +126,40 @@ pub fn get_available_wine_versions() -> Result<Vec<WineVersionInfo>, String> {
     // Remove exact duplicates (same path)
     wine_versions.dedup_by(|a, b| a.path == b.path);
 
-    println!("🍷 Found {} wine/proton versions", wine_versions.len());
+    println!("Found {} wine/proton versions", wine_versions.len());
     for version in &wine_versions {
         println!("   - {} -> {}", version.display_name, version.path);
     }
 
     Ok(wine_versions)
+}
+
+/// Information about Lutris installation status
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct LutrisAvailability {
+    pub is_available: bool,
+    pub installation_type: Option<String>,
+    pub install_instructions: Option<String>,
+}
+
+/// Check if Lutris is installed and available
+/// Returns information about the Lutris installation or installation instructions
+#[tauri::command]
+pub fn check_lutris_availability() -> LutrisAvailability {
+    match LutrisConfig::auto_detect() {
+        Ok(config) => {
+            LutrisAvailability {
+                is_available: true,
+                installation_type: Some(config.description()),
+                install_instructions: None,
+            }
+        }
+        Err(instructions) => {
+            LutrisAvailability {
+                is_available: false,
+                installation_type: None,
+                install_instructions: Some(instructions),
+            }
+        }
+    }
 }

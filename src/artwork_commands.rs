@@ -17,7 +17,7 @@ pub fn save_artwork(slug: String, image_data: Vec<u8>, extension: String) -> Res
         .map_err(|e| format!("Failed to save image: {}", e))?;
 
     let path_str = cache_path.to_string_lossy().to_string();
-    println!("✅ Saved artwork for {} at: {}", slug, path_str);
+    println!("Saved artwork for {} at: {}", slug, path_str);
 
     Ok(path_str)
 }

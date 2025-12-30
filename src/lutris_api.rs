@@ -6,7 +6,6 @@ pub async fn search_lutris_games(search: Option<String>) -> Result<Value, String
 
     let mut url = reqwest::Url::parse(base_url)
         .map_err(|e| format!("Invalid URL: {}", e))?;
-
     if let Some(search_term) = search {
         url.query_pairs_mut().append_pair("search", &search_term);
     }
@@ -44,7 +43,12 @@ pub async fn get_lutris_installers(game_slug: String) -> Result<Value, String> {
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    Ok(data)
+    // Extract the "installers" array from the response
+    let installers = data.get("installers")
+        .ok_or_else(|| "Response missing 'installers' field".to_string())?
+        .clone();
+
+    Ok(installers)
 }
 
 #[tauri::command]
