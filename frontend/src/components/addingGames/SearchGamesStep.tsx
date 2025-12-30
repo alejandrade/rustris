@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   TextField,
@@ -27,29 +27,28 @@ function SearchGamesStep({ onGameSelect, onManualAdd }: SearchGamesStepProps) {
   const [searchResults, setSearchResults] = useState<LutrisGame[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Search functionality disabled
-  // useEffect(() => {
-  //   const trimmedQuery = searchQuery.trim();
-  //   if (trimmedQuery.length < 3) {
-  //     setSearchResults([]);
-  //     return;
-  //   }
-  //   const timer = setTimeout(async () => {
-  //     setIsSearching(true);
-  //     try {
-  //       const response = await lutrisService.searchGames({
-  //         search: trimmedQuery,
-  //       });
-  //       setSearchResults(response.results);
-  //     } catch (error) {
-  //       console.error("Failed to search games:", error);
-  //       setSearchResults([]);
-  //     } finally {
-  //       setIsSearching(false);
-  //     }
-  //   }, 800);
-  //   return () => clearTimeout(timer);
-  // }, [searchQuery]);
+  useEffect(() => {
+    const trimmedQuery = searchQuery.trim();
+    if (trimmedQuery.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await lutrisService.searchGames({
+          search: trimmedQuery,
+        });
+        setSearchResults(response.results);
+      } catch (error) {
+        console.error("Failed to search games:", error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleBrowseFile = async () => {
     try {
@@ -77,18 +76,17 @@ function SearchGamesStep({ onGameSelect, onManualAdd }: SearchGamesStepProps) {
       {/* Search Section */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h6" sx={{ color: "#fff", mb: 2 }}>
-          Searching Lutris for Install Scripts
+          Search Lutris for Install Scripts
         </Typography>
         <Typography variant="body2" sx={{ color: "#8f98a0", mb: 2 }}>
-          Coming soon...
+          Search for games available on Lutris.net
         </Typography>
         <TextField
           fullWidth
           variant="outlined"
-          placeholder="Search disabled - coming soon"
+          placeholder="Search for games (minimum 3 characters)..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          disabled
           InputProps={{
             startAdornment: (
               <SearchIcon sx={{ color: "#8f98a0", mr: 1 }} />
@@ -119,6 +117,59 @@ function SearchGamesStep({ onGameSelect, onManualAdd }: SearchGamesStepProps) {
             },
           }}
         />
+
+        {/* Search Results */}
+        {isSearching && (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+            <CircularProgress sx={{ color: "#5c7e10" }} />
+          </Box>
+        )}
+
+        {!isSearching && searchResults.length > 0 && (
+          <Paper
+            sx={{
+              mt: 2,
+              bgcolor: "#16202d",
+              border: "1px solid #2a475e",
+              maxHeight: 400,
+              overflow: "auto",
+            }}
+          >
+            <List>
+              {searchResults.map((game) => (
+                <ListItem key={game.slug} disablePadding>
+                  <ListItemButton
+                    onClick={() => onGameSelect(game)}
+                    sx={{
+                      "&:hover": {
+                        bgcolor: "#2a475e",
+                      },
+                    }}
+                  >
+                    <ListItemText
+                      primary={game.name}
+                      secondary={game.year ? `${game.year}` : ""}
+                      primaryTypographyProps={{
+                        sx: { color: "#fff" },
+                      }}
+                      secondaryTypographyProps={{
+                        sx: { color: "#8f98a0" },
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+        )}
+
+        {!isSearching && searchQuery.trim().length >= 3 && searchResults.length === 0 && (
+          <Box sx={{ textAlign: "center", mt: 3 }}>
+            <Typography sx={{ color: "#8f98a0" }}>
+              No games found for "{searchQuery}"
+            </Typography>
+          </Box>
+        )}
       </Box>
 
       {/* Add Manually Section */}

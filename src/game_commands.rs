@@ -7,20 +7,20 @@ pub struct AppState {
 
 #[tauri::command]
 pub async fn get_games() -> Result<Vec<GameData>, String> {
-    println!("🔍 Fetching games from Lutris...");
+    println!("Fetching games from Lutris...");
     let games = lutris_cli::list_games_with_data().await?;
-    println!("✅ Returning {} games", games.len());
+    println!("Returning {} games", games.len());
     Ok(games)
 }
 
 #[tauri::command]
 pub async fn launch_game_by_slug(slug: String) -> Result<(), String> {
-    println!("🚀 Launching game via Lutris: {}", slug);
+    println!("Launching game via Lutris: {}", slug);
 
     // Just delegate to Lutris - let it handle all the complexity
     lutris_cli::launch_game_via_lutris(&slug).await?;
 
-    println!("   ✅ Game launch delegated to Lutris");
+    println!("   Game launch delegated to Lutris");
     Ok(())
 }
 

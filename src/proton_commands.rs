@@ -66,7 +66,7 @@ pub async fn fetch_ge_proton_releases() -> Result<Vec<GeProtonRelease>, String> 
         }
     }
 
-    println!("   ✅ Found {} GE-Proton releases", ge_releases.len());
+    println!("   Found {} GE-Proton releases", ge_releases.len());
     for release in &ge_releases {
         println!("   - {} ({:.1} MB)", release.name, release.size_mb);
     }
@@ -81,7 +81,7 @@ pub async fn download_ge_proton(
     download_url: String,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    println!("⬇️  Downloading GE-Proton: {}", tag_name);
+    println!("Downloading GE-Proton: {}", tag_name);
     println!("   URL: {}", download_url);
 
     let proton_dir = rustris_paths::lutris_proton_dir()
@@ -165,7 +165,7 @@ pub async fn download_ge_proton(
         }));
     }
 
-    println!("   📦 Download complete, extracting...");
+    println!("   Download complete, extracting...");
 
     // Emit extraction status
     let _ = app_handle.emit("download-progress", serde_json::json!({
@@ -194,7 +194,7 @@ pub async fn download_ge_proton(
         return Err(format!("Expected extracted folder not found: {:?}", extracted_path));
     }
 
-    println!("   ✅ GE-Proton {} installed successfully as {}!", tag_name, prefixed_name);
+    println!("   GE-Proton {} installed successfully as {}!", tag_name, prefixed_name);
 
     // Return the path to the installed version
     Ok(installed_path.to_string_lossy().to_string())
@@ -203,7 +203,7 @@ pub async fn download_ge_proton(
 /// Delete a Proton version from wine/proton runners directories
 #[tauri::command]
 pub fn delete_proton_version(path: String) -> Result<(), String> {
-    println!("🗑️  Deleting proton version: {}", path);
+    println!("Deleting proton version: {}", path);
 
     let path_buf = std::path::PathBuf::from(&path);
 
@@ -243,6 +243,6 @@ pub fn delete_proton_version(path: String) -> Result<(), String> {
     fs::remove_dir_all(&path_buf)
         .map_err(|e| format!("Failed to delete directory: {}", e))?;
 
-    println!("   ✅ Deleted successfully");
+    println!("   Deleted successfully");
     Ok(())
 }

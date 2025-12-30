@@ -1,12 +1,238 @@
 use crate::lutris_db::LutrisDatabase;
+use crate::lutris_util::LutrisConfig;
 use crate::rustris_paths;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
-use serde_json::Value;
-use tokio::process::Command as TokioCommand;
+use std::sync::OnceLock;
+
+/// Global Lutris configuration instance
+static LUTRIS_CONFIG: OnceLock<LutrisConfig> = OnceLock::new();
+
+/// Get or initialize the global Lutris configuration
+fn get_lutris_config() -> &'static LutrisConfig {
+    LUTRIS_CONFIG.get_or_init(|| {
+        LutrisConfig::auto_detect()
+            .unwrap_or_else(|_| {
+                // Fallback to system config if auto-detect fails
+                // This shouldn't happen in practice since auto_detect returns an error
+                // but we need a fallback for the unwrap_or_else
+                LutrisConfig::system()
+            })
+    })
+}
+
+/// Wine architecture options
+/// Note: Proton is NOT compatible with Win32 prefixes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WineArch {
+    #[serde(rename = "win32")]
+    Win32,
+    #[serde(rename = "win64")]
+    Win64,
+    #[serde(rename = "auto")]
+    Auto,
+}
+
+impl WineArch {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WineArch::Win32 => "win32",
+            WineArch::Win64 => "win64",
+            WineArch::Auto => "auto",
+        }
+    }
+
+    pub fn all() -> Vec<WineArch> {
+        vec![WineArch::Win32, WineArch::Win64, WineArch::Auto]
+    }
+}
+
+/// Lutris installer YAML structure
+#[derive(Debug, Serialize)]
+struct LutrisInstaller {
+    name: String,
+    game_slug: String,
+    version: String,
+    slug: String,
+    runner: String,
+    script: InstallerScript,
+}
+
+#[derive(Debug, Serialize)]
+struct InstallerScript {
+    files: Vec<InstallerFile>,
+    game: InstallerGameConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    wine: Option<InstallerWineConfig>,
+    installer: Vec<InstallerTask>,
+}
+
+#[derive(Debug, Serialize)]
+struct InstallerFile {
+    installer: String,
+}
+
+#[derive(Debug, Serialize)]
+struct InstallerGameConfig {
+    exe: String,
+    prefix: String,
+    arch: String,
+}
+
+#[derive(Debug, Serialize)]
+struct InstallerWineConfig {
+    version: String,
+}
+
+#[derive(Debug, Serialize)]
+struct InstallerTask {
+    task: TaskDetails,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum TaskDetails {
+    CreatePrefix {
+        name: String,
+        prefix: String,
+        arch: String,
+    },
+    Winetricks {
+        name: String,
+        app: String,
+        prefix: String,
+        arch: String,
+        description: String,
+    },
+    WineExec {
+        name: String,
+        executable: String,
+        prefix: String,
+        arch: String,
+        description: String,
+    },
+}
+
+/// Windows version presets for winetricks
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowsVersion {
+    #[serde(rename = "win20")]
+    Win20,
+    #[serde(rename = "win30")]
+    Win30,
+    #[serde(rename = "win31")]
+    Win31,
+    #[serde(rename = "nt351")]
+    Nt351,
+    #[serde(rename = "nt40")]
+    Nt40,
+    #[serde(rename = "win95")]
+    Win95,
+    #[serde(rename = "win98")]
+    Win98,
+    #[serde(rename = "winme")]
+    WinMe,
+    #[serde(rename = "win2k")]
+    Win2k,
+    #[serde(rename = "win2k3")]
+    Win2k3,
+    #[serde(rename = "win2k8")]
+    Win2k8,
+    #[serde(rename = "win2k8r2")]
+    Win2k8r2,
+    #[serde(rename = "winxp")]
+    WinXp,
+    #[serde(rename = "vista")]
+    Vista,
+    #[serde(rename = "win7")]
+    Win7,
+    #[serde(rename = "win8")]
+    Win8,
+    #[serde(rename = "win81")]
+    Win81,
+    #[serde(rename = "win10")]
+    Win10,
+    #[serde(rename = "win11")]
+    Win11,
+}
+
+impl WindowsVersion {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WindowsVersion::Win20 => "win20",
+            WindowsVersion::Win30 => "win30",
+            WindowsVersion::Win31 => "win31",
+            WindowsVersion::Nt351 => "nt351",
+            WindowsVersion::Nt40 => "nt40",
+            WindowsVersion::Win95 => "win95",
+            WindowsVersion::Win98 => "win98",
+            WindowsVersion::WinMe => "winme",
+            WindowsVersion::Win2k => "win2k",
+            WindowsVersion::Win2k3 => "win2k3",
+            WindowsVersion::Win2k8 => "win2k8",
+            WindowsVersion::Win2k8r2 => "win2k8r2",
+            WindowsVersion::WinXp => "winxp",
+            WindowsVersion::Vista => "vista",
+            WindowsVersion::Win7 => "win7",
+            WindowsVersion::Win8 => "win8",
+            WindowsVersion::Win81 => "win81",
+            WindowsVersion::Win10 => "win10",
+            WindowsVersion::Win11 => "win11",
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            WindowsVersion::Win20 => "Windows 2.0",
+            WindowsVersion::Win30 => "Windows 3.0",
+            WindowsVersion::Win31 => "Windows 3.1",
+            WindowsVersion::Nt351 => "Windows NT 3.51",
+            WindowsVersion::Nt40 => "Windows NT 4.0",
+            WindowsVersion::Win95 => "Windows 95",
+            WindowsVersion::Win98 => "Windows 98",
+            WindowsVersion::WinMe => "Windows ME",
+            WindowsVersion::Win2k => "Windows 2000",
+            WindowsVersion::Win2k3 => "Windows 2003",
+            WindowsVersion::Win2k8 => "Windows 2008",
+            WindowsVersion::Win2k8r2 => "Windows 2008 R2",
+            WindowsVersion::WinXp => "Windows XP",
+            WindowsVersion::Vista => "Windows Vista",
+            WindowsVersion::Win7 => "Windows 7",
+            WindowsVersion::Win8 => "Windows 8",
+            WindowsVersion::Win81 => "Windows 8.1",
+            WindowsVersion::Win10 => "Windows 10",
+            WindowsVersion::Win11 => "Windows 11",
+        }
+    }
+
+    pub fn all() -> Vec<WindowsVersion> {
+        vec![
+            WindowsVersion::Win20,
+            WindowsVersion::Win30,
+            WindowsVersion::Win31,
+            WindowsVersion::Nt351,
+            WindowsVersion::Nt40,
+            WindowsVersion::Win95,
+            WindowsVersion::Win98,
+            WindowsVersion::WinMe,
+            WindowsVersion::Win2k,
+            WindowsVersion::Win2k3,
+            WindowsVersion::Win2k8,
+            WindowsVersion::Win2k8r2,
+            WindowsVersion::WinXp,
+            WindowsVersion::Vista,
+            WindowsVersion::Win7,
+            WindowsVersion::Win8,
+            WindowsVersion::Win81,
+            WindowsVersion::Win10,
+            WindowsVersion::Win11,
+        ]
+    }
+}
 
 /// Basic game data from Lutris CLI JSON output
 /// Matches the actual format from `lutris -l -j`
@@ -250,21 +476,15 @@ impl LutrisGame {
     }
 }
 
-/// Check if Lutris is installed and available in PATH
+/// Check if Lutris is installed and available
 pub fn is_lutris_installed() -> bool {
-    Command::new("which")
-        .arg("lutris")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    get_lutris_config().is_lutris_available()
 }
 
 /// List only installed games from Lutris
 pub async fn list_installed_games() -> Result<Vec<LutrisGame>, String> {
-    println!("🔍 Fetching installed games from Lutris CLI...");
-    println!("   Running: lutris -l -o -j (--list-games --installed --json)");
-
-    let output = TokioCommand::new("lutris")
+    let output = get_lutris_config()
+        .build_tokio_command()
         .arg("-l")  // --list-games
         .arg("-o")  // --installed (only installed games)
         .arg("-j")  // --json
@@ -272,11 +492,9 @@ pub async fn list_installed_games() -> Result<Vec<LutrisGame>, String> {
         .await
         .map_err(|e| format!("Failed to run lutris: {}", e))?;
 
-    println!("   Exit status: {:?}", output.status);
-
     let stderr = String::from_utf8_lossy(&output.stderr);
     if !stderr.is_empty() {
-        println!("   ℹ️  Stderr: {}", stderr);
+        println!("   Stderr: {}", stderr);
     }
 
     if !output.status.success() {
@@ -286,11 +504,9 @@ pub async fn list_installed_games() -> Result<Vec<LutrisGame>, String> {
     let stdout = String::from_utf8(output.stdout)
         .map_err(|e| format!("Invalid UTF-8 in output: {}", e))?;
 
-    println!("   📊 Raw output length: {} bytes", stdout.len());
-
     if stdout.trim().is_empty() {
-        println!("   ⚠️  Lutris returned empty output");
-        println!("   💡 This might mean:");
+        println!("   Lutris returned empty output");
+        println!("   This might mean:");
         println!("      - No games are installed in Lutris");
         println!("      - Lutris database is empty");
         println!("      - Try: lutris -l -j (to see all games)");
@@ -299,26 +515,14 @@ pub async fn list_installed_games() -> Result<Vec<LutrisGame>, String> {
 
     // Print first 500 chars of output for debugging
     let preview_len = stdout.len().min(500);
-    println!("   📄 Output preview ({} chars):", preview_len);
-    println!("   {}", &stdout[..preview_len]);
 
     let games: Vec<LutrisGame> = serde_json::from_str(&stdout)
         .map_err(|e| {
-            println!("   ❌ JSON parse error: {}", e);
-            println!("   🔍 Full output:");
+            println!("   JSON parse error: {}", e);
+            println!("   Full output:");
             println!("{}", stdout);
             format!("Failed to parse JSON: {}. Output was {} bytes", e, stdout.len())
         })?;
-
-    println!("✅ Found {} installed games from Lutris", games.len());
-
-    // Log first few games for debugging
-    if !games.is_empty() {
-        println!("   First game: name={}, slug={}",
-            games[0].name,
-            games[0].slug
-        );
-    }
 
     Ok(games)
 }
@@ -326,18 +530,19 @@ pub async fn list_installed_games() -> Result<Vec<LutrisGame>, String> {
 /// Launch a game using Lutris
 /// Command: lutris lutris:rungame/{slug}
 pub async fn launch_game_via_lutris(slug: &str) -> Result<(), String> {
-    println!("🚀 Launching game via Lutris: {}", slug);
+    println!("Launching game via Lutris: {}", slug);
 
     let uri = format!("lutris:rungame/{}", slug);
     println!("   Running: lutris {}", uri);
 
     // Spawn lutris and don't wait for it (games run in background)
-    let child = TokioCommand::new("lutris")
+    let child = get_lutris_config()
+        .build_tokio_command()
         .arg(&uri)
         .spawn()
         .map_err(|e| format!("Failed to launch game: {}", e))?;
 
-    println!("   ✅ Lutris spawned with PID: {}", child.id().unwrap_or(0));
+    println!("   Lutris spawned with PID: {}", child.id().unwrap_or(0));
     println!("   Game should start momentarily...");
 
     Ok(())
@@ -432,11 +637,11 @@ fn find_cover_art(slug: &str) -> Option<String> {
 
 /// Get all games with full data (includes config)
 pub async fn list_games_with_data() -> Result<Vec<GameData>, String> {
-    println!("🔍 Loading games from Lutris database...");
+    println!("Loading games from Lutris database...");
     let db = LutrisDatabase::new()?;
     let db_games = db.get_installed_games()?;
 
-    println!("✅ Found {} games in database", db_games.len());
+    println!("Found {} games in database", db_games.len());
 
     let games: Vec<GameData> = db_games
         .iter()
@@ -482,7 +687,7 @@ pub async fn list_games_with_data() -> Result<Vec<GameData>, String> {
         })
         .collect();
 
-    println!("✅ Loaded {} games with config data", games.len());
+    println!("Loaded {} games with config data", games.len());
     Ok(games)
 }
 
@@ -502,7 +707,7 @@ pub fn get_lutris_default_wine_version() -> Option<String> {
 
     // Prefer custom_wine_path if it exists (this is the full path to wine executable)
     if let Some(custom_path) = wine_section.get("custom_wine_path").and_then(|v| v.as_str()) {
-        println!("📖 Lutris default wine (custom path): {}", custom_path);
+        println!("Lutris default wine (custom path): {}", custom_path);
         // Strip /proton suffix to get the folder path (to match dropdown values)
         let path = PathBuf::from(custom_path);
         if let Some(parent) = path.parent() {
@@ -513,16 +718,16 @@ pub fn get_lutris_default_wine_version() -> Option<String> {
 
     // If only version name is set (not custom_wine_path), resolve it by looking in Lutris proton directory
     if let Some(version_name) = wine_section.get("version").and_then(|v| v.as_str()) {
-        println!("📖 Lutris default wine (version name): {}", version_name);
+        println!("Lutris default wine (version name): {}", version_name);
 
         // Look for this version in Lutris proton directory
         if let Some(proton_dir) = rustris_paths::lutris_proton_dir() {
             let version_path = proton_dir.join(version_name);
             if version_path.exists() {
-                println!("   ✅ Found version at: {}", version_path.display());
+                println!("   Found version at: {}", version_path.display());
                 return Some(version_path.to_string_lossy().to_string());
             } else {
-                println!("   ⚠️  Version '{}' not found in Lutris proton directory", version_name);
+                println!("   Version '{}' not found in Lutris proton directory", version_name);
             }
         }
     }
@@ -532,7 +737,7 @@ pub fn get_lutris_default_wine_version() -> Option<String> {
 
 /// Set Lutris's default Wine version in runners/wine.yml
 pub fn set_lutris_default_wine_version(wine_path: &str) -> Result<(), String> {
-    println!("🍷 Setting Lutris default wine version to: {}", wine_path);
+    println!("Setting Lutris default wine version to: {}", wine_path);
 
     let wine_config = rustris_paths::lutris_wine_config()
         .ok_or("Could not get wine config path")?;
@@ -582,14 +787,14 @@ pub fn set_lutris_default_wine_version(wine_path: &str) -> Result<(), String> {
     fs::write(&wine_config, updated_yaml)
         .map_err(|e| format!("Failed to write wine.yml: {}", e))?;
 
-    println!("   ✅ Lutris default wine version updated!");
+    println!("   Lutris default wine version updated!");
 
     Ok(())
 }
 
 /// Update the Wine/Proton version for a specific game
 pub async fn update_game_wine_version(slug: &str, wine_version: &str) -> Result<(), String> {
-    println!("🍷 Updating wine version for game: {}", slug);
+    println!("Updating wine version for game: {}", slug);
     println!("   New version: {}", wine_version);
 
     // Get config path from Lutris database
@@ -604,7 +809,7 @@ pub async fn update_game_wine_version(slug: &str, wine_version: &str) -> Result<
         return Err(format!("Config file does not exist: {:?}", config_file));
     }
 
-    println!("   📄 Config file: {:?}", config_file);
+    println!("   Config file: {:?}", config_file);
 
     // Load existing config
     let yaml_content = fs::read_to_string(&config_file)
@@ -647,7 +852,247 @@ pub async fn update_game_wine_version(slug: &str, wine_version: &str) -> Result<
     fs::write(&config_file, updated_yaml)
         .map_err(|e| format!("Failed to write config: {}", e))?;
 
-    println!("   ✅ Wine version updated successfully!");
+    println!("   Wine version updated successfully!");
 
     Ok(())
+}
+
+/// Generate a Lutris installer YAML for a Windows .exe installer
+fn generate_installer_yaml(
+    exe_path: &str,
+    game_name: &str,
+    game_slug: &str,
+    wine_version: Option<String>,
+    arch: &WineArch,
+    windows_version: Option<&WindowsVersion>,
+) -> Result<String, String> {
+    let arch_str = arch.as_str().to_string();
+
+    // Build installer tasks
+    let mut tasks = vec![
+        InstallerTask {
+            task: TaskDetails::CreatePrefix {
+                name: "create_prefix".to_string(),
+                prefix: "$GAMEDIR".to_string(),
+                arch: arch_str.clone(),
+            },
+        },
+    ];
+
+    // Add Windows version task if specified
+    if let Some(win_ver) = windows_version {
+        tasks.push(InstallerTask {
+            task: TaskDetails::Winetricks {
+                name: "winetricks".to_string(),
+                app: win_ver.as_str().to_string(),
+                prefix: "$GAMEDIR".to_string(),
+                arch: arch_str.clone(),
+                description: format!("Setting Windows version to {}", win_ver.display_name()),
+            },
+        });
+    }
+
+    // Add wineexec task
+    tasks.push(InstallerTask {
+        task: TaskDetails::WineExec {
+            name: "wineexec".to_string(),
+            executable: "installer".to_string(),
+            prefix: "$GAMEDIR".to_string(),
+            arch: arch_str.clone(),
+            description: "Installing game...".to_string(),
+        },
+    });
+
+    // Extract wine version name from path if specified
+    let wine_config = wine_version.and_then(|version| {
+        let version_name = PathBuf::from(&version)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or(version);
+
+        Some(InstallerWineConfig {
+            version: version_name,
+        })
+    });
+
+    // Build the full installer structure
+    let installer = LutrisInstaller {
+        name: game_name.to_string(),
+        game_slug: game_slug.to_string(),
+        version: "Custom Install".to_string(),
+        slug: format!("{}-custom", game_slug),
+        runner: "wine".to_string(),
+        script: InstallerScript {
+            files: vec![InstallerFile {
+                installer: exe_path.to_string(),
+            }],
+            game: InstallerGameConfig {
+                exe: "drive_c/Program Files".to_string(),
+                prefix: "$GAMEDIR".to_string(),
+                arch: arch_str,
+            },
+            wine: wine_config,
+            installer: tasks,
+        },
+    };
+
+    // Serialize to YAML
+    serde_yaml::to_string(&installer)
+        .map_err(|e| format!("Failed to serialize installer YAML: {}", e))
+}
+
+/// Run a game installer using Lutris installer system
+/// Returns the game slug for the installed game
+///
+/// # Arguments
+/// * `exe_path` - Path to the Windows .exe installer
+/// * `game_name` - Name of the game
+/// * `wine_version` - Optional Wine/Proton version path. If not provided, uses Lutris default.
+/// * `arch` - Wine architecture (win32, win64, or auto). Defaults to win64.
+///   Note: Proton is NOT compatible with win32 prefixes
+/// * `windows_version` - Optional Windows version preset (e.g., win7, win10)
+pub async fn run_wine_installer(
+    exe_path: String,
+    game_name: String,
+    wine_version: Option<String>,
+    arch: Option<WineArch>,
+    windows_version: Option<WindowsVersion>,
+) -> Result<String, String> {
+    println!("Installing game via Lutris: {}", game_name);
+    println!("Installer: {}", exe_path);
+
+    // Verify the installer file exists
+    let installer_path = PathBuf::from(&exe_path);
+    if !installer_path.exists() {
+        return Err(format!("Installer file not found: {}", exe_path));
+    }
+
+    // Use provided wine version or get Lutris's default
+    let wine_version = wine_version.or_else(|| get_lutris_default_wine_version());
+    if let Some(ref version) = wine_version {
+        println!("Using wine version: {}", version);
+    } else {
+        println!("No wine version specified, Lutris will use its default");
+    }
+
+    // Generate a slug from the game name
+    let game_slug = game_name
+        .to_lowercase()
+        .replace(" ", "-")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-')
+        .collect::<String>();
+
+    println!("Game slug: {}", game_slug);
+
+    // Use provided arch or default to win64
+    let arch = arch.unwrap_or(WineArch::Win64);
+    println!("Architecture: {}", arch.as_str());
+
+    // Log Windows version if specified
+    if let Some(ref win_ver) = windows_version {
+        println!("Windows version: {}", win_ver.display_name());
+    }
+
+    // Generate the installer YAML
+    let installer_yaml = generate_installer_yaml(
+        &exe_path,
+        &game_name,
+        &game_slug,
+        wine_version,
+        &arch,
+        windows_version.as_ref(),
+    )?;
+
+    // Create a temporary YAML file
+    let temp_dir = std::env::temp_dir();
+    let yaml_path = temp_dir.join(format!("{}-installer.yml", game_slug));
+
+    fs::write(&yaml_path, installer_yaml)
+        .map_err(|e| format!("Failed to write installer YAML: {}", e))?;
+
+    println!("Created installer script: {}", yaml_path.display());
+
+    // Run lutris --install with the YAML file
+    println!("Starting Lutris installer...");
+
+    let child = get_lutris_config()
+        .build_tokio_command()
+        .arg("--install")
+        .arg(&yaml_path)
+        .spawn()
+        .map_err(|e| format!("Failed to run lutris: {}", e))?;
+
+    println!("   Lutris installer spawned with PID: {}", child.id().unwrap_or(0));
+    println!("   Please complete the installation in the Lutris window.");
+    println!("   The installer may ask you to:");
+    println!("      - Select installer files");
+    println!("      - Choose installation options");
+    println!("      - Wait for downloads/installations to complete");
+
+    // Note: We don't clean up the YAML file immediately since Lutris might need it
+    // It will be cleaned up by the OS from /tmp eventually
+
+    Ok(game_slug)
+}
+
+/// Get all available Wine architecture options for the frontend
+pub fn get_available_wine_architectures() -> Vec<WineArch> {
+    WineArch::all()
+}
+
+/// Get all available Windows version options for the frontend
+pub fn get_available_windows_versions() -> Vec<WindowsVersion> {
+    WindowsVersion::all()
+}
+
+/// Run a Lutris installer from YAML content
+/// This allows running installers fetched from Lutris API or custom YAML
+pub async fn run_lutris_installer_from_yaml(
+    yaml_content: String,
+    game_name: String,
+) -> Result<String, String> {
+    println!("Installing game from YAML: {}", game_name);
+
+    // Generate a slug from the game name
+    let game_slug = game_name
+        .to_lowercase()
+        .replace(" ", "-")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-')
+        .collect::<String>();
+
+    println!("Game slug: {}", game_slug);
+
+    // Create a temporary YAML file
+    let temp_dir = std::env::temp_dir();
+    let yaml_path = temp_dir.join(format!("{}-installer.yml", game_slug));
+
+    fs::write(&yaml_path, &yaml_content)
+        .map_err(|e| format!("Failed to write installer YAML: {}", e))?;
+
+    println!("Created installer script: {}", yaml_path.display());
+
+    // Run lutris --install with the YAML file
+    println!("Starting Lutris installer...");
+
+    let child = get_lutris_config()
+        .build_tokio_command()
+        .arg("--install")
+        .arg(&yaml_path)
+        .spawn()
+        .map_err(|e| format!("Failed to run lutris: {}", e))?;
+
+    println!("   Lutris installer spawned with PID: {}", child.id().unwrap_or(0));
+    println!("   Please complete the installation in the Lutris window.");
+    println!("   The installer may ask you to:");
+    println!("      - Select installer files");
+    println!("      - Choose installation options");
+    println!("      - Wait for downloads/installations to complete");
+
+    // Note: We don't clean up the YAML file immediately since Lutris might need it
+    // It will be cleaned up by the OS from /tmp eventually
+
+    Ok(game_slug)
 }

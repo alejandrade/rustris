@@ -19,6 +19,25 @@ class LutrisService {
     });
   }
 
+  /**
+   * Get installers for a specific game
+   */
+  async getInstallers(gameSlug: string): Promise<any[]> {
+    return invoke<any[]>("get_lutris_installers", {
+      gameSlug,
+    });
+  }
+
+  /**
+   * Run a Lutris installer from YAML content
+   */
+  async runInstallerFromYaml(yamlContent: string, gameName: string): Promise<string> {
+    return invoke<string>("run_lutris_installer_from_yaml", {
+      yamlContent,
+      gameName,
+    });
+  }
+
 }
 
 export const lutrisService = new LutrisService();
