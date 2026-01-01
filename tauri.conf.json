@@ -6,12 +6,29 @@
   "build": {
     "beforeDevCommand": "cd frontend && npm run dev",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "cd frontend && npm run build",
-    "frontendDist": "../frontend/dist"
+    "beforeBuildCommand": "",
+    "frontendDist": "./frontend/dist"
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ],
+    "category": "Game",
+    "shortDescription": "Lutris game manager interface",
+    "longDescription": "A modern interface for managing Lutris games, Wine versions, and Proton compatibility tools",
+    "linux": {
+      "deb": {
+        "depends": [],
+        "files": {}
+      },
+      "rpm": {
+        "depends": [],
+        "release": "1",
+        "files": {}
+      }
+    }
   },
   "app": {
     "windows": [
@@ -31,8 +48,17 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "**",
-          "**/.local/share/**"
+          "$HOME/.local/share/lutris/**",
+          "$HOME/.cache/lutris/**",
+          "$HOME/.var/app/net.lutris.Lutris/**",
+          "$HOME/.steam/**",
+          "$HOME/.local/share/Steam/**",
+          "$HOME/Downloads/**",
+          "$HOME/**/*.yml",
+          "$HOME/**/*.db",
+          "$HOME/**/*.log",
+          "$HOME/**/*.jpg",
+          "$HOME/**/*.png"
         ]
       },
       "capabilities": [
