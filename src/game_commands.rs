@@ -9,8 +9,24 @@ pub struct AppState {
 pub async fn get_games() -> Result<Vec<GameData>, String> {
     println!("Fetching games from Lutris...");
     let games = lutris_cli::list_games_with_data().await?;
-    println!("Returning {} games", games.len());
-    Ok(games)
+    let total_count = games.len();
+
+    // Filter for only wine/proton games
+    let wine_games: Vec<GameData> = games
+        .into_iter()
+        .filter(|game| {
+            game.runner
+                .as_ref()
+                .map(|r| {
+                    let r_lower = r.to_lowercase();
+                    r_lower.contains("wine") || r_lower.contains("proton")
+                })
+                .unwrap_or(false)
+        })
+        .collect();
+
+    println!("Returning {} wine/proton games (filtered from {} total)", wine_games.len(), total_count);
+    Ok(wine_games)
 }
 
 #[tauri::command]

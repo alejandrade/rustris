@@ -14,6 +14,7 @@
 *.code-workspace
 .history/
 
+.claude.md
 # IntelliJ IDEA
 .idea/
 *.iws

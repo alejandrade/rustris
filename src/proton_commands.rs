@@ -35,7 +35,7 @@ pub async fn fetch_ge_proton_releases() -> Result<Vec<GeProtonRelease>, String> 
 
     let mut ge_releases: Vec<GeProtonRelease> = Vec::new();
 
-    for release in releases.iter().take(5) {
+    for release in releases.iter().take(30) {
         let tag_name = release["tag_name"].as_str().unwrap_or("").to_string();
         let name = release["name"].as_str().unwrap_or("").to_string();
         let published_at = release["published_at"].as_str().unwrap_or("").to_string();
