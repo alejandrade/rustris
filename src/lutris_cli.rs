@@ -45,9 +45,6 @@ impl WineArch {
         }
     }
 
-    pub fn all() -> Vec<WineArch> {
-        vec![WineArch::Win32, WineArch::Win64, WineArch::Auto]
-    }
 }
 
 /// Lutris installer YAML structure
@@ -209,29 +206,6 @@ impl WindowsVersion {
         }
     }
 
-    pub fn all() -> Vec<WindowsVersion> {
-        vec![
-            WindowsVersion::Win20,
-            WindowsVersion::Win30,
-            WindowsVersion::Win31,
-            WindowsVersion::Nt351,
-            WindowsVersion::Nt40,
-            WindowsVersion::Win95,
-            WindowsVersion::Win98,
-            WindowsVersion::WinMe,
-            WindowsVersion::Win2k,
-            WindowsVersion::Win2k3,
-            WindowsVersion::Win2k8,
-            WindowsVersion::Win2k8r2,
-            WindowsVersion::WinXp,
-            WindowsVersion::Vista,
-            WindowsVersion::Win7,
-            WindowsVersion::Win8,
-            WindowsVersion::Win81,
-            WindowsVersion::Win10,
-            WindowsVersion::Win11,
-        ]
-    }
 }
 
 /// Basic game data from Lutris CLI JSON output
@@ -512,9 +486,6 @@ pub async fn list_installed_games() -> Result<Vec<LutrisGame>, String> {
         println!("      - Try: lutris -l -j (to see all games)");
         return Ok(Vec::new());
     }
-
-    // Print first 500 chars of output for debugging
-    let preview_len = stdout.len().min(500);
 
     let games: Vec<LutrisGame> = serde_json::from_str(&stdout)
         .map_err(|e| {
@@ -1035,16 +1006,6 @@ pub async fn run_wine_installer(
     // It will be cleaned up by the OS from /tmp eventually
 
     Ok(game_slug)
-}
-
-/// Get all available Wine architecture options for the frontend
-pub fn get_available_wine_architectures() -> Vec<WineArch> {
-    WineArch::all()
-}
-
-/// Get all available Windows version options for the frontend
-pub fn get_available_windows_versions() -> Vec<WindowsVersion> {
-    WindowsVersion::all()
 }
 
 /// Run a Lutris installer from YAML content

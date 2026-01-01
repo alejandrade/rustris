@@ -49,12 +49,6 @@ pub fn lutris_proton_dir() -> Option<PathBuf> {
     lutris_runners_dir().map(|d| d.join("proton"))
 }
 
-/// Get the Lutris runtime directory
-/// Returns: ~/.local/share/lutris/runtime
-pub fn lutris_runtime_dir() -> Option<PathBuf> {
-    lutris_data_dir().map(|d| d.join("runtime"))
-}
-
 /// Get the Lutris coverart directory
 /// Returns: ~/.local/share/lutris/coverart
 pub fn lutris_coverart_dir() -> Option<PathBuf> {
@@ -71,12 +65,6 @@ pub fn lutris_banners_dir() -> Option<PathBuf> {
 /// Returns: ~/.local/share/lutris/icons
 pub fn lutris_icons_dir() -> Option<PathBuf> {
     lutris_data_dir().map(|d| d.join("icons"))
-}
-
-/// Get the Lutris wine prefixes directory
-/// Returns: ~/.local/share/lutris/wine_prefixes
-pub fn lutris_wine_prefixes_dir() -> Option<PathBuf> {
-    lutris_data_dir().map(|d| d.join("wine_prefixes"))
 }
 
 /// Get the Lutris cache directory
@@ -111,14 +99,6 @@ pub fn lutris_main_log() -> Option<PathBuf> {
 /// Returns: ~/.local/share/lutris/pga.db
 pub fn lutris_database() -> Option<PathBuf> {
     lutris_data_dir().map(|d| d.join("pga.db"))
-}
-
-/// Get the umu-run executable path
-/// Returns: ~/.local/share/lutris/runtime/umu/umu-run
-pub fn umu_run_executable() -> Option<PathBuf> {
-    lutris_runtime_dir()
-        .map(|d| d.join("umu").join("umu-run"))
-        .filter(|p| p.exists())
 }
 
 // ============================================================================

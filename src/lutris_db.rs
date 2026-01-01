@@ -37,6 +37,7 @@ mod schema {
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = schema::games)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+#[allow(dead_code)] // Database schema fields - may be used in the future
 pub struct LutrisDbGame {
     pub id: i32,
     pub name: Option<String>,
@@ -101,19 +102,6 @@ impl LutrisDatabase {
 
         game.configpath
             .ok_or_else(|| format!("Game '{}' has no config path in database", game_slug))
-    }
-
-    /// Get a game by slug
-    pub fn get_game_by_slug(&self, game_slug: &str) -> Result<LutrisDbGame, String> {
-        use schema::games::dsl::*;
-
-        let mut conn = self.connect()?;
-
-        games
-            .filter(slug.eq(game_slug))
-            .select(LutrisDbGame::as_select())
-            .first(&mut conn)
-            .map_err(|e| format!("Game '{}' not found in database: {}", game_slug, e))
     }
 
     /// Get all installed games
