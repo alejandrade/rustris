@@ -151,6 +151,7 @@ function Library() {
               startIcon={<AddCircleOutlineIcon />}
               fullWidth
               onClick={() => setAddGameModalOpen(true)}
+              disabled={true}
               sx={{
                 bgcolor: "#5c7e10",
                 "&:hover": {
