@@ -1,10 +1,12 @@
 name: Build Release
 
 on:
-  push:
-    tags:
-      - 'v*'  # Trigger on version tags like v0.1.0
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.1.0)'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -98,7 +100,6 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
 
     permissions:
       contents: write
@@ -106,6 +107,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Delete existing release and tag (if exists)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ inputs.version }}"
+
+          # Delete release if it exists
+          gh release delete "$TAG" --yes 2>/dev/null || echo "Release $TAG doesn't exist yet"
+
+          # Delete tag if it exists
+          git push origin ":refs/tags/$TAG" 2>/dev/null || echo "Tag $TAG doesn't exist yet"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -120,14 +134,11 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           ls -lh
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Rustris v${{ steps.version.outputs.VERSION }}
+          tag_name: v${{ inputs.version }}
+          name: Rustris v${{ inputs.version }}
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -136,26 +147,26 @@ jobs:
 
             ### Debian/Ubuntu (x86_64)
             ```bash
-            sudo dpkg -i Rustris_${{ steps.version.outputs.VERSION }}_amd64.deb
+            sudo dpkg -i Rustris_${{ inputs.version }}_amd64.deb
             ```
 
             ### Debian/Ubuntu (ARM64)
             ```bash
-            sudo dpkg -i Rustris_${{ steps.version.outputs.VERSION }}_arm64.deb
+            sudo dpkg -i Rustris_${{ inputs.version }}_arm64.deb
             ```
 
             ### Universal Linux (AppImage)
 
             **x86_64:**
             ```bash
-            chmod +x Rustris-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
-            ./Rustris-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+            chmod +x Rustris-${{ inputs.version }}-x86_64.AppImage
+            ./Rustris-${{ inputs.version }}-x86_64.AppImage
             ```
 
             **ARM64:**
             ```bash
-            chmod +x Rustris-${{ steps.version.outputs.VERSION }}-aarch64.AppImage
-            ./Rustris-${{ steps.version.outputs.VERSION }}-aarch64.AppImage
+            chmod +x Rustris-${{ inputs.version }}-aarch64.AppImage
+            ./Rustris-${{ inputs.version }}-aarch64.AppImage
             ```
 
             ## Verification
