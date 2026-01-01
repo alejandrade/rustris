@@ -10,12 +10,12 @@ function Layout() {
         <Toolbar>
           <SportsEsportsIcon sx={{ mr: 1 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Lutris2
+            Rustris
           </Typography>
           <IconButton color="inherit" sx={{ mr: 1 }}>
             <AccountCircleIcon />
           </IconButton>
-          <Button color="inherit">Login</Button>
+          <Button disabled={true} color="inherit">Login</Button>
         </Toolbar>
       </AppBar>
       <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
