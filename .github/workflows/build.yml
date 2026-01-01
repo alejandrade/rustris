@@ -1,11 +1,7 @@
 name: Build Test
 
 on:
-  push:
-    branches: [ master, main, develop ]
-  pull_request:
-    branches: [ master, main ]
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger only - no automatic builds
 
 jobs:
   build:
