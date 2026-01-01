@@ -1,0 +1,169 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v0.1.0
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform.target }}
+    runs-on: ${{ matrix.platform.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          # x86_64 Linux
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            arch: amd64
+
+          # ARM64 Linux (using native ARM64 runner)
+          - os: ubuntu-22.04-arm64
+            target: aarch64-unknown-linux-gnu
+            arch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: matrix.platform.os == 'ubuntu-22.04' || matrix.platform.os == 'ubuntu-22.04-arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libsqlite3-dev
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.platform.target }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0.0" --locked
+
+      - name: Build Tauri app
+        run: |
+          cargo tauri build \
+            --target ${{ matrix.platform.target }} \
+            --bundles deb,appimage
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts
+
+          # Copy DEB (try both naming conventions)
+          if [ -f "target/${{ matrix.platform.target }}/release/bundle/deb/Rustris_${{ github.ref_name }}_${{ matrix.platform.arch }}.deb" ]; then
+            cp "target/${{ matrix.platform.target }}/release/bundle/deb/Rustris_"*"_${{ matrix.platform.arch }}.deb" artifacts/
+          elif [ -f "target/${{ matrix.platform.target }}/release/bundle/deb/rustris_"*"_${{ matrix.platform.arch }}.deb" ]; then
+            cp "target/${{ matrix.platform.target }}/release/bundle/deb/rustris_"*"_${{ matrix.platform.arch }}.deb" artifacts/
+          fi
+
+          # Copy AppImage
+          if [ -d "target/${{ matrix.platform.target }}/release/bundle/appimage" ]; then
+            cp target/${{ matrix.platform.target }}/release/bundle/appimage/*.AppImage artifacts/ || true
+          fi
+
+          ls -lh artifacts/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustris-${{ matrix.platform.arch }}
+          path: artifacts/*
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Organize release files
+        run: |
+          mkdir -p release
+          find release-artifacts -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} release/ \;
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          ls -lh
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Rustris v${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            ### Debian/Ubuntu (x86_64)
+            ```bash
+            sudo dpkg -i Rustris_${{ steps.version.outputs.VERSION }}_amd64.deb
+            ```
+
+            ### Debian/Ubuntu (ARM64)
+            ```bash
+            sudo dpkg -i Rustris_${{ steps.version.outputs.VERSION }}_arm64.deb
+            ```
+
+            ### Universal Linux (AppImage)
+
+            **x86_64:**
+            ```bash
+            chmod +x Rustris-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+            ./Rustris-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+            ```
+
+            **ARM64:**
+            ```bash
+            chmod +x Rustris-${{ steps.version.outputs.VERSION }}-aarch64.AppImage
+            ./Rustris-${{ steps.version.outputs.VERSION }}-aarch64.AppImage
+            ```
+
+            ## Verification
+            Verify your download with:
+            ```bash
+            sha256sum -c SHA256SUMS.txt
+            ```
+          files: |
+            release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
