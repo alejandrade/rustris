@@ -1,5 +1,16 @@
 use crate::lutris_cli::{self, GameData};
 use crate::rustris_paths;
+use crate::game_log_buffer::LogBufferManager;
+use std::sync::OnceLock;
+
+/// Global log buffer manager instance (like Lutris's LOG_BUFFERS)
+static LOG_BUFFERS: OnceLock<LogBufferManager> = OnceLock::new();
+
+/// Get the global log buffer manager
+fn get_log_buffers() -> &'static LogBufferManager {
+    LOG_BUFFERS.get_or_init(|| LogBufferManager::new())
+}
+
 
 pub struct AppState {
     // Empty for now - may add app-level state later
@@ -30,28 +41,58 @@ pub async fn get_games() -> Result<Vec<GameData>, String> {
 }
 
 #[tauri::command]
-pub async fn launch_game_by_slug(slug: String) -> Result<(), String> {
+pub async fn launch_game_by_slug(slug: String, window: tauri::Window) -> Result<(), String> {
     println!("Launching game via Lutris: {}", slug);
 
-    // Just delegate to Lutris - let it handle all the complexity
-    lutris_cli::launch_game_via_lutris(&slug).await?;
+    // Get or create buffer for this game
+    let log_buffers = get_log_buffers();
+    let buffer = log_buffers.get_or_create(&slug);
 
-    println!("   Game launch delegated to Lutris");
+    // Launch game with output capture
+    lutris_cli::launch_game_via_lutris_with_capture(&slug, buffer.clone(), window).await?;
+
+    println!("   Game launch delegated to Lutris with log capture");
     Ok(())
 }
 
 #[tauri::command]
-pub fn get_game_log(_slug: String) -> Result<String, String> {
-    // Find game log files using utility
+pub fn get_game_log(slug: String) -> Result<String, String> {
+    let log_buffers = get_log_buffers();
+
+    // 1. Check in-memory buffer first
+    if let Some(buffer_lock) = log_buffers.get(&slug) {
+        let buf = buffer_lock.lock().unwrap();
+
+        // If the game is running or has been run this session,
+        // the buffer exists. Even if it's empty, we prefer this
+        // "live" view over a potentially old file on disk.
+        let content = buf.get_all();
+        if !content.is_empty() {
+            return Ok(content);
+        }
+    }
+
+    // 2. Fallback to Disk
+    // We only reach this if no in-memory buffer exists for the slug
     let log_paths = rustris_paths::find_game_log_paths();
 
     if log_paths.is_empty() {
-        return Err("No log files found. Try: ~/.cache/lutris/lutris.log or ~/steam-0.log".to_string());
+        return Err("No log files found in standard locations.".to_string());
     }
 
-    // Read the first log file found
-    std::fs::read_to_string(&log_paths[0])
-        .map_err(|e| format!("Failed to read log file: {}", e))
+    // Read the most recent log file
+    // Optimization: If the file is massive, reading the whole thing into a
+    // String can lag the UI. For now, we'll read it all to match your original logic.
+    match std::fs::read_to_string(&log_paths[0]) {
+        Ok(content) => {
+            if content.is_empty() {
+                Ok("Log file is empty.".to_string())
+            } else {
+                Ok(content)
+            }
+        },
+        Err(e) => Err(format!("Failed to read log file: {}", e)),
+    }
 }
 
 #[tauri::command]
@@ -71,6 +112,14 @@ pub fn save_game_log(slug: String) -> Result<String, String> {
         .map_err(|e| format!("Failed to copy log file: {}", e))?;
 
     Ok(dest_path.to_string_lossy().to_string())
+}
+
+/// Clear and remove the log buffer for a game
+#[tauri::command]
+pub fn clear_game_log(slug: String) -> Result<(), String> {
+    let log_buffers = get_log_buffers();
+    log_buffers.remove(&slug);
+    Ok(())
 }
 
 #[tauri::command]

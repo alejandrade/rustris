@@ -1,126 +1,176 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  Dialog,
-  AppBar,
-  Toolbar,
-  IconButton,
   Typography,
   Box,
   Paper,
+  Button,
+  Chip,
+  Stack,
+  CircularProgress,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import { listen } from "@tauri-apps/api/event";
+import SaveIcon from "@mui/icons-material/Save";
+import { gameService } from "../services/GameService";
 
 interface GameLogProps {
-  gameId: number;
+  slug: string;
   gameName: string;
-  open: boolean;
-  onClose: () => void;
+  isRunning: boolean;
 }
 
-interface LogEntry {
-  stream: "stdout" | "stderr";
-  message: string;
-  timestamp: Date;
-}
+const MAX_LOG_LINES = 1000; // Keep only the last 1000 lines
 
-export default function GameLog({ gameId, gameName, open, onClose }: GameLogProps) {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const logsEndRef = useRef<HTMLDivElement>(null);
+export default function GameLog({ slug, isRunning }: GameLogProps) {
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const [isSavingLog, setIsSavingLog] = useState(false);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
+  // Clear logs when switching games
   useEffect(() => {
-    if (!open) return;
+    setLogLines([]);
+    gameService.clearGameLog(slug);
+  }, [slug]);
 
-    // Clear logs when dialog opens
-    setLogs([]);
+  // Listen to real-time logs when game is running
+  useEffect(() => {
+    if (!isRunning) return;
 
-    // Listen for game log events
-    const unlisten = listen<[number, string, string]>("game-log", (event) => {
-      const [logGameId, stream, message] = event.payload;
+    // Listen for real-time log events
+    const setupListener = async () => {
+      const unlisten = await gameService.onGameLog(slug, (payload) => {
+        // Append new lines and enforce max limit
+        setLogLines((prevLines) => {
+          const newLines = [...prevLines, ...payload.lines];
+          // Keep only the last MAX_LOG_LINES
+          if (newLines.length > MAX_LOG_LINES) {
+            return newLines.slice(-MAX_LOG_LINES);
+          }
+          return newLines;
+        });
+      });
 
-      // Only show logs for this game
-      if (logGameId === gameId) {
-        setLogs((prevLogs) => [
-          ...prevLogs,
-          {
-            stream: stream as "stdout" | "stderr",
-            message,
-            timestamp: new Date(),
-          },
-        ]);
-      }
+      return unlisten;
+    };
+
+    let unlistenFn: (() => void) | null = null;
+    setupListener().then((fn) => {
+      unlistenFn = fn;
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      if (unlistenFn) {
+        unlistenFn();
+      }
     };
-  }, [open, gameId]);
+  }, [isRunning, slug]);
 
+  // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
-    // Auto-scroll to bottom when new logs arrive
-    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logLines]);
+
+  const handleSaveLog = async () => {
+    setIsSavingLog(true);
+    try {
+      const savedPath = await gameService.saveGameLog(slug);
+      alert(`Log saved to: ${savedPath}`);
+    } catch (error) {
+      console.error("Failed to save log:", error);
+      alert(`Failed to save log: ${error}`);
+    } finally {
+      setIsSavingLog(false);
+    }
+  };
 
   return (
-    <Dialog open={open} onClose={onClose} fullScreen>
-      <AppBar sx={{ position: "relative", bgcolor: "#16202d" }}>
-        <Toolbar>
-          <IconButton edge="start" color="inherit" onClick={onClose} aria-label="close">
-            <CloseIcon />
-          </IconButton>
-          <Typography sx={{ ml: 2, flex: 1 }} variant="h6">
-            Game Output - {gameName}
+    <Paper
+      sx={{
+        bgcolor: "#0d1117",
+        color: "#c9d1d9",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* Log Controls Header */}
+      <Box
+        sx={{
+          p: 2,
+          borderBottom: "1px solid #30363d",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Typography variant="h6" sx={{ color: "#8b949e", fontFamily: "monospace" }}>
+            Game Output
           </Typography>
-        </Toolbar>
-      </AppBar>
-
-      <Box sx={{ bgcolor: "#0d1117", height: "100%", overflow: "hidden" }}>
-        <Paper
-          sx={{
-            height: "100%",
-            bgcolor: "#0d1117",
-            color: "#c9d1d9",
-            p: 2,
-            overflowY: "auto",
-            fontFamily: "monospace",
-            fontSize: "0.9rem",
-          }}
-        >
-          {logs.length === 0 ? (
-            <Typography sx={{ color: "#8b949e", fontFamily: "monospace" }}>
-              Waiting for game output...
-            </Typography>
-          ) : (
-            logs.map((log, index) => (
-              <Box
-                key={index}
-                sx={{
-                  mb: 0.5,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                <span
-                  style={{
-                    color: log.stream === "stderr" ? "#ff7b72" : "#58a6ff",
-                    marginRight: "8px",
-                  }}
-                >
-                  [{log.timestamp.toLocaleTimeString()}]
-                </span>
-                <span
-                  style={{
-                    color: log.stream === "stderr" ? "#ff7b72" : "#c9d1d9",
-                  }}
-                >
-                  {log.message}
-                </span>
-              </Box>
-            ))
-          )}
-          <div ref={logsEndRef} />
-        </Paper>
+          <Chip
+            label={isRunning ? "Running" : "Stopped"}
+            size="small"
+            sx={{
+              bgcolor: isRunning ? "#238636" : "#da3633",
+              color: "#fff",
+              fontFamily: "monospace",
+            }}
+          />
+          <Typography sx={{ color: "#8b949e", fontSize: "0.875rem", fontFamily: "monospace" }}>
+            {logLines.length} lines
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={isSavingLog ? <CircularProgress size={16} /> : <SaveIcon />}
+            onClick={handleSaveLog}
+            disabled={isSavingLog || logLines.length === 0}
+            sx={{
+              color: "#a371f7",
+              borderColor: "#a371f7",
+              "&:hover": { bgcolor: "rgba(163, 113, 247, 0.1)", borderColor: "#a371f7" },
+            }}
+          >
+            {isSavingLog ? "Saving..." : "Save Log"}
+          </Button>
+        </Stack>
       </Box>
-    </Dialog>
+
+      {/* Log Content */}
+      <Box
+        ref={logContainerRef}
+        sx={{
+          p: 2,
+          flex: 1,
+          overflowY: "auto",
+          bgcolor: "#0d1117",
+        }}
+      >
+        {logLines.length === 0 ? (
+          <Typography sx={{ color: "#8b949e", fontFamily: "monospace" }}>
+            {isRunning ? "Waiting for game output..." : "Launch the game to see output..."}
+          </Typography>
+        ) : (
+          logLines.map((line, index) => (
+            <Box
+              key={index}
+              sx={{
+                mb: 0.5,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                color: "#c9d1d9",
+                fontFamily: "monospace",
+                fontSize: "0.85rem",
+              }}
+            >
+              {line}
+            </Box>
+          ))
+        )}
+      </Box>
+    </Paper>
   );
 }
