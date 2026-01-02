@@ -1,7 +1,7 @@
 name: Build Release
 
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch:
     inputs:
       version:
         description: 'Release version (e.g., 0.1.0)'
@@ -12,17 +12,15 @@ jobs:
   build:
     name: Build ${{ matrix.platform.target }}
     runs-on: ${{ matrix.platform.os }}
-
     strategy:
       fail-fast: false
       matrix:
         platform:
-          # x86_64 Linux (self-hosted)
-          - os: [self-hosted, x86_64, mac]
+          # x86_64 Linux (GitHub Cloud)
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             arch: amd64
-
-          # ARM64 Linux (self-hosted)
+          # ARM64 Linux (Self-hosted)
           - os: [self-hosted, arm64, mac]
             target: aarch64-unknown-linux-gnu
             arch: arm64
@@ -31,8 +29,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # FIX: Run this on BOTH cloud and self-hosted (if self-hosted is a fresh container)
+      # Or, specifically ensure it runs on ubuntu-latest.
       - name: Install dependencies (Linux)
-        if: contains(matrix.platform.os, 'self-hosted')
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -49,24 +48,16 @@ jobs:
           toolchain: stable
           target: ${{ matrix.platform.target }}
 
+      # Cache is critical for the Cloud runner (x86_64) to be fast
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.platform.target }}
-          cache-on-failure: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
 
       - name: Install frontend dependencies
         working-directory: ./frontend
@@ -88,19 +79,8 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts
-
-          # Copy DEB (try both naming conventions)
-          if [ -f "target/${{ matrix.platform.target }}/release/bundle/deb/Rustris_${{ github.ref_name }}_${{ matrix.platform.arch }}.deb" ]; then
-            cp "target/${{ matrix.platform.target }}/release/bundle/deb/Rustris_"*"_${{ matrix.platform.arch }}.deb" artifacts/
-          elif [ -f "target/${{ matrix.platform.target }}/release/bundle/deb/rustris_"*"_${{ matrix.platform.arch }}.deb" ]; then
-            cp "target/${{ matrix.platform.target }}/release/bundle/deb/rustris_"*"_${{ matrix.platform.arch }}.deb" artifacts/
-          fi
-
-          # Copy AppImage
-          if [ -d "target/${{ matrix.platform.target }}/release/bundle/appimage" ]; then
-            cp target/${{ matrix.platform.target }}/release/bundle/appimage/*.AppImage artifacts/ || true
-          fi
-
+          # Look for files in the standard Tauri output directory
+          find target/${{ matrix.platform.target }}/release/bundle -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} artifacts/ \;
           ls -lh artifacts/
 
       - name: Upload artifacts
@@ -114,26 +94,11 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Delete existing release and tag (if exists)
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="v${{ inputs.version }}"
-
-          # Delete release if it exists
-          gh release delete "$TAG" --yes 2>/dev/null || echo "Release $TAG doesn't exist yet"
-
-          # Delete tag if it exists
-          git push origin ":refs/tags/$TAG" 2>/dev/null || echo "Tag $TAG doesn't exist yet"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -143,10 +108,10 @@ jobs:
       - name: Organize release files
         run: |
           mkdir -p release
+          # Move all downloaded artifacts into one folder for the release
           find release-artifacts -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} release/ \;
           cd release
           sha256sum * > SHA256SUMS.txt
-          ls -lh
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -156,30 +121,6 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          body: |
-            ## Installation
-
-            ### Debian/Ubuntu (x86_64)
-            ```bash
-            sudo dpkg -i Rustris_${{ inputs.version }}_amd64.deb
-            ```
-
-            ### Debian/Ubuntu (ARM64)
-            ```bash
-            sudo dpkg -i Rustris_${{ inputs.version }}_arm64.deb
-            ```
-
-            ### Universal Linux (AppImage)
-            ```bash
-            chmod +x Rustris-${{ inputs.version }}-x86_64.AppImage
-            ./Rustris-${{ inputs.version }}-x86_64.AppImage
-            ```
-
-            ## Verification
-            Verify your download with:
-            ```bash
-            sha256sum -c SHA256SUMS.txt
-            ```
           files: |
             release/*
         env:
