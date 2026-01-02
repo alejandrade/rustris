@@ -22,10 +22,10 @@ jobs:
             target: x86_64-unknown-linux-gnu
             arch: amd64
 
-          # ARM64 Linux (requires GitHub Team/Enterprise - uncomment if available)
-          # - os: ubuntu-22.04-arm64
-          #   target: aarch64-unknown-linux-gnu
-          #   arch: arm64
+          # ARM64 Linux
+          - os: ubuntu-22.04-arm64
+            target: aarch64-unknown-linux-gnu
+            arch: arm64
 
     steps:
       - name: Checkout code
@@ -145,9 +145,14 @@ jobs:
           body: |
             ## Installation
 
-            ### Debian/Ubuntu
+            ### Debian/Ubuntu (x86_64)
             ```bash
             sudo dpkg -i Rustris_${{ inputs.version }}_amd64.deb
+            ```
+
+            ### Debian/Ubuntu (ARM64)
+            ```bash
+            sudo dpkg -i Rustris_${{ inputs.version }}_arm64.deb
             ```
 
             ### Universal Linux (AppImage)
@@ -155,8 +160,6 @@ jobs:
             chmod +x Rustris-${{ inputs.version }}-x86_64.AppImage
             ./Rustris-${{ inputs.version }}-x86_64.AppImage
             ```
-
-            > **Note:** ARM64 builds are not included in this release. They require GitHub Team/Enterprise plan for ARM64 runners.
 
             ## Verification
             Verify your download with:
