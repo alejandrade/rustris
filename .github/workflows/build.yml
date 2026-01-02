@@ -9,12 +9,12 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          # x86_64 Linux
-          - os: ubuntu-22.04
+          # x86_64 Linux (self-hosted)
+          - os: [self-hosted, x86_64, mac]
             target: x86_64-unknown-linux-gnu
             arch: amd64
           # ARM64 Linux (self-hosted)
-          - os: self-hosted
+          - os: [self-hosted, arm64, mac]
             target: aarch64-unknown-linux-gnu
             arch: arm64
     steps:
