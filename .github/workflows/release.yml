@@ -145,26 +145,26 @@ jobs:
             ## Installation
 
             ### Debian/Ubuntu (x86_64)
-```bash
+            ```bash
             sudo dpkg -i Rustris_${{ inputs.version }}_amd64.deb
-```
+            ```
 
             ### Debian/Ubuntu (ARM64)
-```bash
+            ```bash
             sudo dpkg -i Rustris_${{ inputs.version }}_arm64.deb
-```
+            ```
 
             ### Universal Linux (AppImage)
-```bash
+            ```bash
             chmod +x Rustris-${{ inputs.version }}-x86_64.AppImage
             ./Rustris-${{ inputs.version }}-x86_64.AppImage
-```
+            ```
 
             ## Verification
             Verify your download with:
-```bash
+            ```bash
             sha256sum -c SHA256SUMS.txt
-```
+            ```
           files: |
             release/*
         env:
