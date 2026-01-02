@@ -1,13 +1,10 @@
 name: Build Test
-
 on:
   workflow_dispatch:  # Manual trigger only - no automatic builds
-
 jobs:
   build:
     name: Build ${{ matrix.platform.target }}
     runs-on: ${{ matrix.platform.os }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -16,16 +13,14 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             arch: amd64
-
           # ARM64 Linux (self-hosted)
-          - os: [self-hosted, mac-arm64-runner]
+          - os: self-hosted
             target: aarch64-unknown-linux-gnu
             arch: arm64
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+      
       - name: Install dependencies (Linux)
         run: |
           sudo apt-get update
@@ -36,35 +31,35 @@ jobs:
             librsvg2-dev \
             patchelf \
             libsqlite3-dev
-
+      
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           target: ${{ matrix.platform.target }}
-
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
+      
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: npm install
-
+      
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
-
+      
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2.0.0" --locked
-
+      
       - name: Build Tauri app
         run: |
           cargo tauri build \
             --target ${{ matrix.platform.target }} \
             --bundles deb,appimage
-
+      
       - name: Upload build artifacts (for inspection)
         uses: actions/upload-artifact@v4
         with:
