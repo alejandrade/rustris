@@ -13,9 +13,12 @@ jobs:
           - os: ubuntu-latest  # Cloud Runner
             target: x86_64-unknown-linux-gnu
             arch: amd64
+            pretty_name: "Linux x64 (Cloud)"
+
           - os: [self-hosted, arm64, mac] # Your Local Runner
             target: aarch64-unknown-linux-gnu
             arch: arm64
+            pretty_name: "Linux ARM64 (Mac Studio)"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
