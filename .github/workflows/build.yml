@@ -21,19 +21,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.platform.target }}
-          cache-on-failure: true
-
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
+      # No cache actions needed - self-hosted runners use persistent Docker volumes
+      # Cargo cache: ~/.cargo (persistent volume)
+      # Build artifacts: target/ (in _work persistent volume)
+      # Node modules: node_modules/ (in _work persistent volume)
 
       - name: Install frontend dependencies
         working-directory: ./frontend
