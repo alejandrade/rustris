@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
-import { Box, Typography, Paper, Button, Chip, Stack, CircularProgress, Select, MenuItem, FormControl, InputLabel } from "@mui/material";
+import { Box, Typography, Button, Chip, Select, MenuItem, FormControl, InputLabel } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
-import DeleteIcon from "@mui/icons-material/Delete";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Game, useGames } from "../context/GameContext";
 import { gameService, wineService } from "../services";
+import GameLog from "./GameLog";
 
 interface GameDetailProps {
   game: Game;
@@ -14,51 +13,17 @@ interface GameDetailProps {
 
 export default function GameDetail({ game }: GameDetailProps) {
   const { availableWineVersions } = useGames();
-  const [showLogs, setShowLogs] = useState(false);
   const [isProcessRunning, setIsProcessRunning] = useState(false);
-  const [logContent, setLogContent] = useState<string>("");
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [isSavingLogs, setIsSavingLogs] = useState(false);
   const [selectedWineVersion, setSelectedWineVersion] = useState<string>("");
 
   const handlePlay = async () => {
     try {
       await gameService.launchGame(game.slug);
       setIsProcessRunning(true);
-      setShowLogs(true); // Auto-show log controls when game launches
-      setLogContent("");
       console.log(`Game launched: ${game.slug}`);
     } catch (error) {
       console.error("Failed to launch game:", error);
       alert(`Failed to launch game: ${error}`);
-    }
-  };
-
-  const handleGetLogs = async () => {
-    setIsLoadingLogs(true);
-    try {
-      const content = await gameService.getGameLog(game.slug);
-      setLogContent(content);
-      setShowLogs(true);
-      console.log(`Retrieved log content (${content.length} bytes)`);
-    } catch (error) {
-      console.error("Failed to get logs:", error);
-      alert(`Failed to get logs: ${error}`);
-    } finally {
-      setIsLoadingLogs(false);
-    }
-  };
-
-  const handleSaveLogs = async () => {
-    setIsSavingLogs(true);
-    try {
-      const savedPath = await gameService.saveGameLog(game.slug);
-      alert(`Log saved to: ${savedPath}`);
-    } catch (error) {
-      console.error("Failed to save logs:", error);
-      alert(`Failed to save logs: ${error}`);
-    } finally {
-      setIsSavingLogs(false);
     }
   };
 
@@ -117,9 +82,9 @@ export default function GameDetail({ game }: GameDetailProps) {
   };
 
   return (
-    <Box>
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header with cover and title */}
-      <Box sx={{ display: "flex", alignItems: "flex-start", mb: 3 }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", mb: 2, flexShrink: 0 }}>
         {/* Cover Art */}
         <Box
           sx={{
@@ -267,6 +232,7 @@ export default function GameDetail({ game }: GameDetailProps) {
               size="large"
               startIcon={<PlayArrowIcon />}
               onClick={handlePlay}
+              disabled={isProcessRunning}
               sx={{
                 bgcolor: "#5c7e10",
                 "&:hover": { bgcolor: "#7ba31b" },
@@ -282,88 +248,14 @@ export default function GameDetail({ game }: GameDetailProps) {
         </Box>
       </Box>
 
-      {/* Game Logs */}
-      {showLogs && (
-        <Paper
-          sx={{
-            bgcolor: "#0d1117",
-            color: "#c9d1d9",
-            mb: 2,
-          }}
-        >
-          {/* Log Controls Header */}
-          <Box sx={{ p: 2, borderBottom: "1px solid #30363d", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography
-                variant="h6"
-                sx={{ color: "#8b949e", fontFamily: "monospace" }}
-              >
-                Game Output
-              </Typography>
-              <Chip
-                label={isProcessRunning ? "Running" : "Stopped"}
-                size="small"
-                sx={{
-                  bgcolor: isProcessRunning ? "#238636" : "#da3633",
-                  color: "#fff",
-                  fontFamily: "monospace",
-                }}
-              />
-            </Box>
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={isLoadingLogs ? <CircularProgress size={16} sx={{ color: "#58a6ff" }} /> : <VisibilityIcon />}
-                onClick={handleGetLogs}
-                disabled={isLoadingLogs}
-                sx={{
-                  color: "#58a6ff",
-                  borderColor: "#58a6ff",
-                  "&:hover": { bgcolor: "rgba(88, 166, 255, 0.1)", borderColor: "#58a6ff" },
-                }}
-              >
-                {isLoadingLogs ? "Loading..." : "Get Logs"}
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={isSavingLogs ? <CircularProgress size={16} sx={{ color: "#a371f7" }} /> : <DeleteIcon />}
-                onClick={handleSaveLogs}
-                disabled={isSavingLogs}
-                sx={{
-                  color: "#a371f7",
-                  borderColor: "#a371f7",
-                  "&:hover": { bgcolor: "rgba(163, 113, 247, 0.1)", borderColor: "#a371f7" },
-                }}
-              >
-                {isSavingLogs ? "Saving..." : "Save Logs"}
-              </Button>
-            </Stack>
-          </Box>
-
-          {/* Log Content */}
-          <Box sx={{ p: 3, height: "400px", overflowY: "auto" }}>
-          {logContent ? (
-            <Box
-              sx={{
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                fontFamily: "monospace",
-                fontSize: "0.85rem",
-                color: "#c9d1d9",
-              }}
-            >
-              {logContent}
-            </Box>
-          ) : (
-            <Typography sx={{ color: "#8b949e", fontFamily: "monospace" }}>
-              Click "Get Logs" to view game output...
-            </Typography>
-          )}
-          </Box>
-        </Paper>
-      )}
+      {/* Game Log - takes remaining space */}
+      <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <GameLog
+          slug={game.slug}
+          gameName={game.name}
+          isRunning={isProcessRunning}
+        />
+      </Box>
     </Box>
   );
 }

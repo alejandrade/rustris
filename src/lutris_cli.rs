@@ -498,23 +498,53 @@ pub async fn list_installed_games() -> Result<Vec<LutrisGame>, String> {
     Ok(games)
 }
 
-/// Launch a game using Lutris
-/// Command: lutris lutris:rungame/{slug}
-pub async fn launch_game_via_lutris(slug: &str) -> Result<(), String> {
-    println!("Launching game via Lutris: {}", slug);
+/// Launch a game using Lutris with output capture for real-time log streaming
+pub async fn launch_game_via_lutris_with_capture(
+    slug: &str,
+    buffer: std::sync::Arc<std::sync::Mutex<crate::game_log_buffer::LogBuffer>>,
+    window: tauri::Window,
+) -> Result<(), String> {
+    use crate::game_log_buffer::LogStreamer;
+    use std::process::Stdio;
+
+    println!("Launching game via Lutris with log capture: {}", slug);
 
     let uri = format!("lutris:rungame/{}", slug);
     println!("   Running: lutris {}", uri);
 
-    // Spawn lutris and don't wait for it (games run in background)
-    let child = get_lutris_config()
+    // Spawn lutris with stdout/stderr capture
+    let mut child = get_lutris_config()
         .build_tokio_command()
         .arg(&uri)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to launch game: {}", e))?;
 
     println!("   Lutris spawned with PID: {}", child.id().unwrap_or(0));
-    println!("   Game should start momentarily...");
+
+    // Get stdout and stderr handles
+    let stdout = child.stdout.take()
+        .ok_or("Failed to capture stdout")?;
+    let stderr = child.stderr.take()
+        .ok_or("Failed to capture stderr")?;
+
+    // Start streaming logs from both stdout and stderr
+    let buffer_clone = buffer.clone();
+    let slug_clone = slug.to_string();
+    let window_clone = window.clone();
+
+    // Stream stdout
+    let streamer_stdout = LogStreamer::new(slug_clone.clone(), buffer.clone());
+    tokio::spawn(async move {
+        streamer_stdout.stream_output(stdout, window_clone).await;
+    });
+
+    // Stream stderr
+    let streamer_stderr = LogStreamer::new(slug_clone, buffer_clone);
+    tokio::spawn(async move {
+        streamer_stderr.stream_output(stderr, window).await;
+    });
 
     Ok(())
 }
