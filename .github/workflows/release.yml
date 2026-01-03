@@ -84,12 +84,12 @@ jobs:
         run: |
           cargo tauri build \
             --target ${{ matrix.platform.target }} \
-            --bundles deb,appimage
+            --bundles deb,appimage,rpm
 
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts
-          find target/${{ matrix.platform.target }}/release/bundle -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} artifacts/ \;
+          find target/${{ matrix.platform.target }}/release/bundle -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.rpm" \) -exec cp {} artifacts/ \;
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -118,7 +118,7 @@ jobs:
       - name: Organize release files
         run: |
           mkdir -p release
-          find release-artifacts -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} release/ \;
+          find release-artifacts -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.rpm" \) -exec cp {} release/ \;
           cd release
           sha256sum * > SHA256SUMS.txt
 
@@ -140,6 +140,7 @@ jobs:
             | Platform | Architecture | Installer | Portable |
             | :--- | :--- | :--- | :--- |
             | **Ubuntu / Debian** | `x86_64` | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_x86_64.deb) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_x86_64.AppImage) |
+            | **Fedora / CentOS** | `x86_64` | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris-${{ github.event.inputs.version }}.x86_64.rpm) | |
             | **Linux ARM64** | `arm64` | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.deb) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.AppImage) |
             
             ---
@@ -153,6 +154,11 @@ jobs:
             
             # For ARM64 (Mac Silicon / Pi)
             sudo dpkg -i Rustris_${{ github.event.inputs.version }}_arm64.deb
+            ```
+            
+            #### Fedora / CentOS (.rpm)
+            ```bash
+            sudo dnf install Rustris-${{ github.event.inputs.version }}.x86_64.rpm
             ```
             
             #### Universal Linux (.AppImage)
