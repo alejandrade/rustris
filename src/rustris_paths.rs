@@ -73,6 +73,18 @@ pub fn lutris_cache_dir() -> Option<PathBuf> {
     dirs::cache_dir().map(|d| d.join("lutris"))
 }
 
+/// Get the Rustris data directory
+/// Returns: ~/.local/share/rustris
+pub fn rustris_data_dir() -> Option<PathBuf> {
+    dirs::data_local_dir().map(|d| d.join("rustris"))
+}
+
+/// Get the Rustris crashes directory
+/// Returns: ~/.local/share/rustris/crashes
+pub fn rustris_crashes_dir() -> Option<PathBuf> {
+    rustris_data_dir().map(|d| d.join("crashes"))
+}
+
 // ============================================================================
 // Specific File Paths
 // ============================================================================

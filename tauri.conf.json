@@ -27,10 +27,14 @@
         "depends": [],
         "release": "1",
         "files": {}
+      },
+      "appimage": {
+        "bundleMediaFramework": true
       }
     }
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "fullscreen": false,
@@ -38,9 +42,11 @@
         "title": "Rustris",
         "width": 1024,
         "height": 720,
+        "center": true,
         "minWidth": 400,
         "minHeight": 300,
-        "dragDropEnabled": true
+        "visible": false,
+        "backgroundColor": "#0a0a0a"
       }
     ],
     "security": {
@@ -74,7 +80,15 @@
             "core:webview:allow-create-webview",
             "core:webview:allow-create-webview-window",
             "dialog:default",
-            "dialog:allow-open"
+            "dialog:allow-open",
+            {
+              "identifier": "opener:allow-open-path",
+              "allow": [
+                {
+                  "path": "**/*"
+                }
+              ]
+            }
           ]
         }
       ]

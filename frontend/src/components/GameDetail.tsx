@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { Box, Typography, Button, Chip, Select, MenuItem, FormControl, InputLabel } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import StopIcon from "@mui/icons-material/Stop";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Game, useGames } from "../context/GameContext";
 import { gameService, wineService } from "../services";
 import GameLog from "./GameLog";
+import ConfirmationModal from "./ConfirmationModal";
 
 interface GameDetailProps {
   game: Game;
@@ -14,7 +16,9 @@ interface GameDetailProps {
 export default function GameDetail({ game }: GameDetailProps) {
   const { availableWineVersions } = useGames();
   const [isProcessRunning, setIsProcessRunning] = useState(false);
+  const [processPids, setProcessPids] = useState<string[]>([]);
   const [selectedWineVersion, setSelectedWineVersion] = useState<string>("");
+  const [isConfirmModalOpen, setConfirmModalOpen] = useState(false);
 
   const handlePlay = async () => {
     try {
@@ -27,16 +31,35 @@ export default function GameDetail({ game }: GameDetailProps) {
     }
   };
 
+  const handleForceClose = async () => {
+    try {
+      await gameService.forceCloseGame(processPids);
+      setIsProcessRunning(false);
+      setProcessPids([]);
+      console.log(`Game force closed: ${game.slug}`);
+    } catch (error) {
+      console.error("Failed to force close game:", error);
+      alert(`Failed to force close game: ${error}`);
+    }
+  };
+
+  const handleForceCloseConfirm = () => {
+    handleForceClose();
+    setConfirmModalOpen(false);
+  };
+
   // Check process status periodically using slug
   useEffect(() => {
     const checkProcess = async () => {
       try {
         console.log("checking if process is running");
-        const running = await gameService.checkGameRunning(game.slug);
-        setIsProcessRunning(running);
+        const status = await gameService.checkGameRunning(game.slug);
+        setIsProcessRunning(status.is_running);
+        setProcessPids(status.pids);
       } catch (error) {
         console.error("Failed to check process status:", error);
         setIsProcessRunning(false);
+        setProcessPids([]);
       }
     };
 
@@ -227,23 +250,46 @@ export default function GameDetail({ game }: GameDetailProps) {
           </Box>
 
           <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<PlayArrowIcon />}
-              onClick={handlePlay}
-              disabled={isProcessRunning}
-              sx={{
-                bgcolor: "#5c7e10",
-                "&:hover": { bgcolor: "#7ba31b" },
-                fontSize: "1.1rem",
-                px: 4,
-                py: 1.5,
-                fontWeight: 600,
-              }}
-            >
-              Play
-            </Button>
+            {isProcessRunning ? (
+              <Button
+                variant="outlined"
+                size="large"
+                startIcon={<StopIcon />}
+                onClick={() => setConfirmModalOpen(true)}
+                sx={{
+                  borderColor: "#dc2626",
+                  color: "#dc2626",
+                  bgcolor: "transparent",
+                  "&:hover": {
+                    bgcolor: "rgba(220, 38, 38, 0.1)",
+                    borderColor: "#991b1b",
+                    color: "#991b1b",
+                    fontSize: "1.1rem",
+                  },
+                  px: 4,
+                  py: 1.5
+                }}
+              >
+                Force Detach...
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<PlayArrowIcon />}
+                onClick={handlePlay}
+                sx={{
+                  bgcolor: "#5c7e10",
+                  "&:hover": { bgcolor: "#7ba31b" },
+                  fontSize: "1.1rem",
+                  px: 4,
+                  py: 1.5,
+                  fontWeight: 600,
+                }}
+              >
+                Play
+              </Button>
+            )}
           </Box>
         </Box>
       </Box>
@@ -256,6 +302,20 @@ export default function GameDetail({ game }: GameDetailProps) {
           isRunning={isProcessRunning}
         />
       </Box>
+      <ConfirmationModal
+          open={isConfirmModalOpen}
+          onClose={() => setConfirmModalOpen(false)}
+          onConfirm={handleForceCloseConfirm}
+          title="Force Detach Process?"
+          confirmText="Detach"
+      >
+          <Typography>
+              This action attempts to detach the UI from the game process.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+              It may not stop the game and could leave it in a strange state. This is useful for cleaning up a stuck process, but may have unexpected results.
+          </Typography>
+      </ConfirmationModal>
     </Box>
   );
 }

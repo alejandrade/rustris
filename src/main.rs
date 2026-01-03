@@ -14,10 +14,11 @@ mod lutris_db;
 mod lutris_util;
 mod proton_commands;
 mod rustris_paths;
+mod utility_commands;
 
 use artwork_commands::save_artwork;
 use game_commands::{
-    check_game_running, clear_game_log, get_game_log,
+    check_game_running, clear_game_log, force_close_game, get_game_log,
     get_games, launch_game_by_slug, save_game_log, AppState,
 };
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -35,8 +36,84 @@ use proton_commands::{
     download_ge_proton,
     fetch_ge_proton_releases,
 };
+use utility_commands::{
+    check_for_crash_log,
+    delete_crash_log,
+    get_system_info,
+    open_target,
+    trigger_test_panic,
+};
 use std::env;
+use std::fs;
+use tauri::Manager;
+
 fn main() {
+    // Set up panic handler to capture crashes
+    std::panic::set_hook(Box::new(|panic_info| {
+        let panic_message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Unknown panic".to_string()
+        };
+
+        let location = if let Some(location) = panic_info.location() {
+            format!("{}:{}:{}", location.file(), location.line(), location.column())
+        } else {
+            "Unknown location".to_string()
+        };
+
+        let backtrace = std::backtrace::Backtrace::force_capture();
+
+        // Get system info
+        let system_info = get_system_info();
+
+        // Create crashes directory if it doesn't exist
+        if let Some(crashes_dir) = rustris_paths::rustris_crashes_dir() {
+            let _ = fs::create_dir_all(&crashes_dir);
+
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let log_path = crashes_dir.join(format!("crash_{}.log", timestamp));
+
+            // Build YAML crash report
+            let mut log_content = String::new();
+            log_content.push_str("---\n");
+            log_content.push_str("rustris_crash_report:\n");
+            log_content.push_str(&format!("  timestamp: \"{}\"\n", chrono::Local::now().to_rfc3339()));
+            log_content.push_str(&format!("  type: \"Rust Panic\"\n"));
+            log_content.push_str(&format!("  message: \"{}\"\n", panic_message.replace("\"", "\\\"")));
+            log_content.push_str(&format!("  location: \"{}\"\n\n", location));
+
+            log_content.push_str("  contact:\n");
+            log_content.push_str("    developer: \"alejandrade\"\n");
+            log_content.push_str("    github: \"https://github.com/alejandrade\"\n");
+            log_content.push_str("    repository: \"https://github.com/alejandrade/rustris\"\n\n");
+
+            log_content.push_str("  system_information:\n");
+            log_content.push_str(&serde_json::to_string_pretty(&system_info)
+                .unwrap_or_else(|_| "    failed_to_serialize: true\n".to_string())
+                .lines()
+                .map(|line| format!("    {}\n", line))
+                .collect::<String>());
+            log_content.push_str("\n");
+
+            log_content.push_str("  backtrace: |\n");
+            for line in format!("{}", backtrace).lines() {
+                log_content.push_str(&format!("    {}\n", line));
+            }
+
+            if let Err(e) = fs::write(&log_path, &log_content) {
+                eprintln!("Failed to write crash log to {:?}: {}", log_path, e);
+            } else {
+                eprintln!("Crash log written to: {:?}", log_path);
+            }
+        }
+
+        eprintln!("\nRustris crashed!");
+        eprintln!("Panic: {}", panic_message);
+        eprintln!("Location: {}", location);
+    }));
 
     #[cfg(target_os = "linux")]
     {
@@ -47,53 +124,19 @@ fn main() {
         // This forces a simpler, more stable rendering path.
         env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
 
-        // 3. Force Software Rendering if necessary
-        // Uncomment the line below ONLY if users still report white screens.
-        // It makes the app use CPU instead of GPU for drawing.
-        env::set_var("LIBGL_ALWAYS_SOFTWARE", "1");
     }
-    // Check if Lutris is installed
     if !lutris_cli::is_lutris_installed() {
-        eprintln!("Lutris is not installed!");
-        eprintln!("   This application requires Lutris to be installed.");
-        eprintln!("   Please install Lutris first: https://lutris.net");
-        eprintln!("   ");
-        eprintln!("   On Ubuntu/Debian:");
-        eprintln!("     sudo add-apt-repository ppa:lutris-team/lutris");
-        eprintln!("     sudo apt update");
-        eprintln!("     sudo apt install lutris");
-        eprintln!("   ");
-        eprintln!("   On Arch:");
-        eprintln!("     sudo pacman -S lutris");
-        eprintln!("   ");
-        eprintln!("   On Fedora:");
-        eprintln!("     sudo dnf install lutris");
-
-        // Don't exit - allow the app to start but show error in UI
-        println!("Continuing startup without Lutris...");
-    } else {
-        println!("Lutris is installed");
+        panic!("Lutris is not installed! This application requires Lutris to run. Please install it from https://lutris.net");
     }
+
+    println!("Lutris is installed");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState {})
         .setup(|app| {
-            // Initialize log buffer cleanup task now that Tokio runtime is available
-            // DISABLED: This was causing issues with log streaming
-            // init_log_buffer_cleanup();
-
-            // Register Alt+F4 to close the app (Windows convention)
-            let handle = app.handle().clone();
-            app.global_shortcut()
-                .on_shortcut("Alt+F4", move |_app, _shortcut, _event| {
-                    println!("Alt+F4 pressed - closing application");
-                    handle.exit(0);
-                })
-                .unwrap();
-
-            // Register Ctrl+Q to close the app (Linux convention)
             let handle = app.handle().clone();
             app.global_shortcut()
                 .on_shortcut("CommandOrControl+Q", move |_app, _shortcut, _event| {
@@ -102,14 +145,28 @@ fn main() {
                 })
                 .unwrap();
 
+            // Show the window after webview is ready to avoid white screen
+            let window = app.get_webview_window("main").unwrap();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                window.show().unwrap();
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // System info & debugging
+            get_system_info,
+            check_for_crash_log,
+            delete_crash_log,
+            trigger_test_panic,
+            open_target,
             // Game management
             get_games,
             launch_game_by_slug,
             // Process & Log management
             check_game_running,
+            force_close_game,
             get_game_log,
             clear_game_log,
             save_game_log,

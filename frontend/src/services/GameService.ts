@@ -16,6 +16,14 @@ export interface LogChunkPayload {
   total_lines: number;
 }
 
+/**
+ * Game running status with PIDs
+ */
+export interface GameRunningStatus {
+  is_running: boolean;
+  pids: string[];
+}
+
 export interface Game {
   slug: string;
   name: string;
@@ -48,9 +56,17 @@ class GameService {
 
   /**
    * Check if a game is currently running
+   * Returns status with running state and PIDs
    */
-  async checkGameRunning(slug: string): Promise<boolean> {
-    return invoke<boolean>("check_game_running", { slug });
+  async checkGameRunning(slug: string): Promise<GameRunningStatus> {
+    return invoke<GameRunningStatus>("check_game_running", { slug });
+  }
+
+  /**
+   * Force close a game by killing its processes
+   */
+  async forceCloseGame(pids: string[]): Promise<void> {
+    return invoke("force_close_game", { pids });
   }
 
   /**

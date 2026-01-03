@@ -97,19 +97,71 @@ pub fn get_game_log(slug: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn save_game_log(slug: String) -> Result<String, String> {
-    // Find an existing log file
-    let log_paths = rustris_paths::find_game_log_paths();
-    let source_log = log_paths.first()
-        .ok_or("No log file found to save")?;
+    use std::io::Write;
 
+    // Get system info
+    let system_info = crate::get_system_info();
+
+    // Get log content from buffer or file
+    let log_content = get_game_log(slug.clone()).unwrap_or_else(|_| "No log content available".to_string());
+
+    // Create diagnosis file content
+    let mut diagnosis_content = String::new();
+    diagnosis_content.push_str("=== RUSTRIS DIAGNOSIS REPORT ===\n\n");
+
+    diagnosis_content.push_str("=== CONTACT INFORMATION ===\n\n");
+    diagnosis_content.push_str("If you need help, please send this file to:\n");
+    diagnosis_content.push_str("Repository: https://github.com/alejandrade/rustris\n\n");
+    diagnosis_content.push_str("Reddit: https://www.reddit.com/r/Lutris/\n\n");
+
+    diagnosis_content.push_str("Game: ");
+    diagnosis_content.push_str(&slug);
+    diagnosis_content.push_str("\n");
+    diagnosis_content.push_str("Timestamp: ");
+    diagnosis_content.push_str(&chrono::Local::now().to_rfc3339());
+    diagnosis_content.push_str("\n\n");
+
+    diagnosis_content.push_str("=== SYSTEM INFORMATION ===\n\n");
+    diagnosis_content.push_str(&serde_json::to_string_pretty(&system_info).unwrap_or_else(|_| "Failed to serialize system info".to_string()));
+    diagnosis_content.push_str("\n\n");
+    // Get Lutris game config
+    let lutris_config_content = match crate::lutris_db::LutrisDatabase::new() {
+        Ok(db) => {
+            match db.get_configpath(&slug) {
+                Ok(configpath) => {
+                    match rustris_paths::lutris_game_config(&configpath) {
+                        Some(path) if path.exists() => {
+                            std::fs::read_to_string(path)
+                                .unwrap_or_else(|e| format!("Failed to read Lutris config: {}", e))
+                        },
+                        _ => "Lutris game config file not found at expected path.".to_string(),
+                    }
+                },
+                Err(e) => format!("Could not find configpath for game '{}' in database: {}", slug, e),
+            }
+        },
+        Err(e) => format!("Failed to open Lutris database: {}", e),
+    };
+
+    diagnosis_content.push_str("=== LUTRIS GAME CONFIGURATION ===\n\n");
+    diagnosis_content.push_str(&lutris_config_content);
+    diagnosis_content.push_str("\n\n");
+
+    diagnosis_content.push_str("=== GAME LOG ===\n\n");
+    diagnosis_content.push_str(&log_content);
+
+    // Save to Downloads
     let downloads_dir = rustris_paths::downloads_dir()
         .ok_or("Could not find Downloads directory")?;
-    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    let dest_filename = format!("{}_lutris_{}.log", slug, timestamp);
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let dest_filename = format!("{}_diagnosis_{}.txt", slug, timestamp);
     let dest_path = downloads_dir.join(&dest_filename);
 
-    std::fs::copy(source_log, &dest_path)
-        .map_err(|e| format!("Failed to copy log file: {}", e))?;
+    let mut file = std::fs::File::create(&dest_path)
+        .map_err(|e| format!("Failed to create diagnosis file: {}", e))?;
+
+    file.write_all(diagnosis_content.as_bytes())
+        .map_err(|e| format!("Failed to write diagnosis file: {}", e))?;
 
     Ok(dest_path.to_string_lossy().to_string())
 }
@@ -122,43 +174,111 @@ pub fn clear_game_log(slug: String) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct GameRunningStatus {
+    pub is_running: bool,
+    pub pids: Vec<String>,
+}
+
 #[tauri::command]
-pub async fn check_game_running(slug: String) -> Result<bool, String> {
+pub async fn check_game_running(slug: String) -> Result<GameRunningStatus, String> {
     // Check if the game is running by looking for lutris running this specific game
     use std::process::Command;
 
-    // First check if lutris itself is running this game
+    println!("Checking if game is running: {}", slug);
+
+    // Check if lutris itself is running this game
+    // This is the most reliable method since Lutris manages the game process
+    let pattern = format!("lutris.*{}", slug);
+    println!("  pgrep pattern: {}", pattern);
+
     let lutris_check = Command::new("pgrep")
         .arg("-f")
-        .arg(format!("lutris.*{}", slug))
+        .arg(&pattern)
         .output()
         .map_err(|e| format!("Failed to run pgrep: {}", e))?;
 
-    if lutris_check.status.success() {
-        return Ok(true);
+    let is_running = lutris_check.status.success();
+
+    if is_running {
+        let stdout = String::from_utf8_lossy(&lutris_check.stdout);
+        let pids: Vec<String> = stdout
+            .trim()
+            .split('\n')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        println!("  RUNNING - Found {} process(es)", pids.len());
+
+        // Show the actual command lines of matched processes
+        for pid in &pids {
+            if let Ok(output) = Command::new("ps")
+                .arg("-p")
+                .arg(pid)
+                .arg("-o")
+                .arg("cmd=")
+                .output()
+            {
+                let cmd = String::from_utf8_lossy(&output.stdout);
+                println!("    PID {}: {}", pid, cmd.trim());
+            }
+        }
+
+        Ok(GameRunningStatus {
+            is_running: true,
+            pids,
+        })
+    } else {
+        println!("  NOT RUNNING - No matching processes");
+        Ok(GameRunningStatus {
+            is_running: false,
+            pids: vec![],
+        })
     }
+}
 
-    // If lutris isn't running, check if the game executable is running
-    let games = lutris_cli::list_installed_games().await?;
-    if let Some(game) = games.into_iter().find(|g| g.slug == slug) {
-        let game_data = game.to_game_data();
+#[tauri::command]
+pub fn force_close_game(pids: Vec<String>) -> Result<(), String> {
+    use std::process::Command;
 
-        // If we have an executable path, check for it
-        if let Some(exe) = game_data.executable {
-            // Get just the executable name without path
-            if let Some(exe_name) = std::path::Path::new(&exe).file_name() {
-                let exe_str = exe_name.to_string_lossy();
-                let exe_check = Command::new("pgrep")
-                    .arg("-f")
-                    .arg(exe_str.as_ref())
-                    .output()
-                    .map_err(|e| format!("Failed to run pgrep: {}", e))?;
+    println!("Force closing game processes: {:?}", pids);
 
-                return Ok(exe_check.status.success());
+    for pid in pids {
+        println!("  Killing PID: {}", pid);
+
+        // Try SIGTERM first (graceful)
+        let result = Command::new("kill")
+            .arg(&pid)
+            .output();
+
+        match result {
+            Ok(output) if output.status.success() => {
+                println!("    Successfully sent SIGTERM to PID {}", pid);
+            }
+            Ok(_) => {
+                // If SIGTERM failed, try SIGKILL (force)
+                println!("    SIGTERM failed, trying SIGKILL for PID {}", pid);
+                let kill_result = Command::new("kill")
+                    .arg("-9")
+                    .arg(&pid)
+                    .output();
+
+                if let Ok(output) = kill_result {
+                    if output.status.success() {
+                        println!("    Successfully sent SIGKILL to PID {}", pid);
+                    } else {
+                        println!("    Failed to kill PID {}", pid);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("    Error killing PID {}: {}", pid, e);
             }
         }
     }
 
-    Ok(false)
+    Ok(())
 }
 

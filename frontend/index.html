@@ -1,12 +1,575 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rustris</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rustris</title>
+  <style>
+    /* Error display styling */
+    #error-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0a0a0a;
+      color: #ffffff;
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 1.5rem;
+      overflow: hidden;
+      z-index: 999999;
+    }
+
+    #error-overlay .container {
+      max-width: 500px;
+      margin: 0 auto;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    #error-overlay h1 {
+      color: #ef4444;
+      margin: 0 0 0.5rem 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    #error-overlay .action-box {
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin: 1rem 0;
+    }
+
+    #error-overlay .action-title {
+      color: #8b5cf6;
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin: 0 0 0.75rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    #error-overlay .step {
+      display: flex;
+      align-items: center;
+      margin: 0.5rem 0;
+      gap: 0.75rem;
+      font-size: 0.875rem;
+    }
+
+    #error-overlay .step-number {
+      background: #8b5cf6;
+      color: #ffffff;
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    #error-overlay .step-content {
+      flex: 1;
+      color: #666666;
+    }
+
+    #error-overlay .url-box {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+      margin: 0.25rem 0;
+      font-family: ui-monospace, monospace;
+      font-size: 0.75rem;
+      color: #a78bfa;
+      word-break: break-all;
+      cursor: pointer;
+      transition: all 150ms ease-in-out;
+    }
+
+    #error-overlay .url-box:hover {
+      background: #242424;
+      border-color: #3a3a3a;
+    }
+
+    #error-overlay button {
+      background: #8b5cf6;
+      color: #ffffff;
+      padding: 0.625rem 1.25rem;
+      border: none;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: 0.375rem;
+      transition: all 150ms ease-in-out;
+      width: 100%;
+    }
+
+    #error-overlay button:hover {
+      background: #7c3aed;
+    }
+
+    #error-overlay button:active {
+      transform: scale(0.98);
+    }
+
+    #error-overlay .copied {
+      background: #10b981 !important;
+    }
+
+    #error-overlay .secondary-btn {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      margin-top: 0.5rem;
+    }
+
+    #error-overlay .secondary-btn:hover {
+      background: #242424;
+      border-color: #3a3a3a;
+    }
+
+    #error-overlay .button-group {
+      margin: 0.75rem 0 0 0;
+    }
+
+    #error-overlay .warning-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      margin: 0 0 1rem 0;
+    }
+
+    #error-overlay .warning-title {
+      color: #ef4444;
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin: 0 0 0.375rem 0;
+    }
+
+    #error-overlay .warning-text {
+      color: #666666;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      margin: 0.25rem 0;
+    }
+
+    #error-overlay .warning-box code {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0.125rem 0.25rem;
+      border-radius: 0.25rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.7rem;
+    }
+
+    #error-overlay a:hover {
+      color: #c4b5fd !important;
+    }
+
+    #error-overlay .technical-details {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #2a2a2a;
+      text-align: center;
+    }
+
+    #error-overlay .toggle-details {
+      background: transparent;
+      color: #666666;
+      font-size: 0.75rem;
+      padding: 0.25rem 0;
+      width: auto;
+      text-decoration: underline;
+      font-weight: 400;
+    }
+
+    #error-overlay .toggle-details:hover {
+      color: #666666;
+    }
+
+    #error-overlay .details-content {
+      display: none;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      padding: 0.75rem;
+      border-radius: 0.375rem;
+      margin-top: 0.5rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.7rem;
+      max-height: 200px;
+      overflow-y: auto;
+      color: #ef4444;
+      text-align: left;
+    }
+
+    #error-overlay .details-content pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Error overlay -->
+<div id="error-overlay">
+  <div class="container">
+    <h1>SOMETHING WENT WRONG</h1>
+    <div id="compatibility-warning"></div>
+
+    <div style="background: #141414; border: 1px solid #2a2a2a; border-radius: 0.5rem; padding: 1rem; margin: 1rem 0;">
+      <div style="color: #8b5cf6; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.75rem; text-align: center;">REPORT THIS BUG</div>
+      <div style="text-align: center; margin-top: 0.75rem; margin-bottom: 0.75rem;">
+        <a href="#" onclick="openGitHub(event)" style="color: #a78bfa; text-decoration: none; font-size: 1.1rem; transition: color 150ms;">https://github.com/alejandrade/rustris</a>
+      </div>
+      <button onclick="createGitHubIssue()" onmouseenter="this.style.background='#242424'; this.style.borderColor='#3a3a3a'" onmouseleave="this.style.background='#1a1a1a'; this.style.borderColor='#2a2a2a'" style="width: 100%; background: #1a1a1a; color: #8b5cf6; padding: 0.625rem; border: 1px solid #2a2a2a; cursor: pointer; font-size: 0.875rem; font-weight: 500; border-radius: 0.375rem; transition: all 150ms;">
+        Create Bug Report
+      </button>
+    </div>
+
+    <div id="error-details" style="margin-top: 1rem;"></div>
+
+    <button onclick="dismissError()" onmouseenter="this.style.background='#242424'; this.style.borderColor='#3a3a3a'" onmouseleave="this.style.background='#1a1a1a'; this.style.borderColor='#2a2a2a'" style="margin-top: 1rem; background: #1a1a1a; border: 1px solid #2a2a2a;">
+      Dismiss and Continue
+    </button>
+  </div>
+</div>
+
+<script>
+  let errorData = {
+    errors: [],
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    timestamp: new Date().toISOString(),
+    url: window.location.href
+  };
+
+  // Detect WebKit version and check compatibility
+  function checkWebKitCompatibility() {
+    const ua = navigator.userAgent;
+    const webkitMatch = ua.match(/AppleWebKit\/(\d+)\.?(\d+)?/);
+
+    if (webkitMatch) {
+      const majorVersion = parseInt(webkitMatch[1]);
+      const minorVersion = parseInt(webkitMatch[2] || '0');
+      const webkitVersion = `${majorVersion}.${minorVersion}`;
+
+      if (majorVersion < 605) {
+        return {
+          compatible: false,
+          webkitVersion: webkitVersion
+        };
+      }
+
+      return {
+        compatible: true,
+        webkitVersion: webkitVersion
+      };
+    }
+
+    return {
+      compatible: true,
+      webkitVersion: 'Unknown'
+    };
+  }
+
+  const compatCheck = checkWebKitCompatibility();
+
+  // Catch all unhandled errors
+  window.addEventListener('error', (event) => {
+    const errorInfo = {
+      type: 'JavaScript Error',
+      message: event.message,
+      filename: event.filename,
+      line: event.lineno,
+      column: event.colno,
+      stack: event.error?.stack
+    };
+    errorData.errors.push(errorInfo);
+    showError();
+  });
+
+  // Catch unhandled promise rejections
+  window.addEventListener('unhandledrejection', (event) => {
+    const errorInfo = {
+      type: 'Promise Rejection',
+      message: String(event.reason),
+      stack: event.reason?.stack
+    };
+    errorData.errors.push(errorInfo);
+    showError();
+  });
+
+  async function showError() {
+    const overlay = document.getElementById('error-overlay');
+    overlay.style.display = 'block';
+
+    // Show compatibility warning if WebKit is old
+    if (!compatCheck.compatible) {
+      const warningDiv = document.getElementById('compatibility-warning');
+      warningDiv.innerHTML = `
+        <div class="warning-box">
+          <div class="warning-title">⚠️ System Too Old</div>
+          <p class="warning-text">WebKit ${compatCheck.webkitVersion} detected. Needs 605+ (WebKitGTK 2.40+)</p>
+          <p class="warning-text">Upgrade to Ubuntu 22.04+, Debian 12+, or Fedora 36+</p>
+        </div>
+      `;
+    }
+
+    // Display full error report
+    const errorReport = await formatErrorReport();
+    const detailsDiv = document.getElementById('error-details');
+    detailsDiv.innerHTML = `<pre onclick="selectAllText(this)" style="color: #666666; font-size: 0.75rem; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; max-height: 35vh; background: #141414; border: 1px solid #2a2a2a; padding: 1rem; border-radius: 0.5rem; cursor: pointer;" title="Click to select all">${errorReport}</pre>`;
+
+    console.error('Fatal error occurred:', errorData);
+  }
+
+  async function getSystemInfo() {
+    try {
+      let info = {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        screenResolution: `${screen.width}x${screen.height}`,
+        windowSize: `${window.innerWidth}x${window.innerHeight}`,
+        colorDepth: screen.colorDepth,
+        pixelRatio: window.devicePixelRatio,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        memory: navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'Unknown',
+        cores: navigator.hardwareConcurrency || 'Unknown',
+        webkitVersion: compatCheck.webkitVersion,
+        webkitCompatible: compatCheck.compatible
+      };
+      try {
+        const { invoke } = window.__TAURI__.core;
+        const tauriInfo = await invoke('get_system_info').catch(() => null);
+        if (tauriInfo) {
+          info["system_info"] = tauriInfo;
+        }
+      } catch (ignore) {}
+
+      return JSON.stringify(info);
+    } catch (e) {
+      return `Error gathering system info: ${e.message}`;
+    }
+  }
+
+  async function formatErrorReport() {
+    const systemInfo = await getSystemInfo();
+    const sysData = systemInfo ? JSON.parse(systemInfo) : {};
+
+    // Build YAML report
+    let report = '---\n';
+    report += 'rustris_error_report:\n';
+    report += `  timestamp: "${errorData.timestamp}"\n`;
+    report += `  platform: "${errorData.platform}"\n`;
+    report += `  url: "${errorData.url}"\n`;
+    report += `  webkit_version: "${compatCheck.webkitVersion}"\n`;
+    report += `  webkit_compatible: ${compatCheck.compatible}\n`;
+    report += '\n';
+
+    // Contact information
+    report += '  contact:\n';
+    report += '    developer: "alejandrade"\n';
+    report += '    github: "https://github.com/alejandrade"\n';
+    report += '    repository: "https://github.com/alejandrade/rustris"\n';
+    report += '\n';
+
+    // System information
+    if (systemInfo) {
+      report += '  system_information:\n';
+      Object.entries(sysData).forEach(([key, value]) => {
+        if (typeof value === 'object' && value !== null) {
+          report += `    ${key}:\n`;
+          Object.entries(value).forEach(([subKey, subValue]) => {
+            const escapedValue = String(subValue).replace(/"/g, '\\"');
+            report += `      ${subKey}: "${escapedValue}"\n`;
+          });
+        } else {
+          const escapedValue = String(value).replace(/"/g, '\\"');
+          report += `    ${key}: "${escapedValue}"\n`;
+        }
+      });
+      report += '\n';
+    }
+
+    // Error details
+    report += '  errors:\n';
+    errorData.errors.forEach((error, index) => {
+      report += `    - index: ${index + 1}\n`;
+      report += `      type: "${error.type}"\n`;
+      const escapedMessage = error.message.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+      report += `      message: "${escapedMessage}"\n`;
+
+      if (error.filename) {
+        report += `      filename: "${error.filename}"\n`;
+        report += `      line: ${error.line}\n`;
+        report += `      column: ${error.column}\n`;
+      }
+
+      if (error.stack) {
+        const escapedStack = error.stack.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        report += `      stack: "${escapedStack}"\n`;
+      }
+    });
+
+    return report;
+  }
+
+  // Check for Rust crash logs on startup
+  async function checkForRustCrash() {
+    try {
+      const { invoke } = window.__TAURI__.core;
+      const crashLog = await invoke('check_for_crash_log');
+
+      if (crashLog) {
+        // Get system info to augment the crash log
+        const systemInfo = await getSystemInfo();
+        const sysData = systemInfo ? JSON.parse(systemInfo) : {};
+
+        // Build augmented crash report
+        let augmentedLog = crashLog;
+
+        // Add frontend system info if not already present
+        if (!crashLog.includes('system_information:')) {
+          augmentedLog += '\n\n  frontend_system_information:\n';
+          Object.entries(sysData).forEach(([key, value]) => {
+            if (typeof value === 'object' && value !== null) {
+              augmentedLog += `    ${key}:\n`;
+              Object.entries(value).forEach(([subKey, subValue]) => {
+                const escapedValue = String(subValue).replace(/"/g, '\\"');
+                augmentedLog += `      ${subKey}: "${escapedValue}"\n`;
+              });
+            } else {
+              const escapedValue = String(value).replace(/"/g, '\\"');
+              augmentedLog += `    ${key}: "${escapedValue}"\n`;
+            }
+          });
+        }
+
+        // Display the crash log with click-to-select
+        const detailsDiv = document.getElementById('error-details');
+        detailsDiv.innerHTML = `<pre onclick="selectAllText(this)" style="color: #666666; font-size: 0.75rem; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; max-height: 35vh; background: #141414; border: 1px solid #2a2a2a; padding: 1rem; border-radius: 0.5rem; cursor: pointer;" title="Click to select all">${augmentedLog}</pre>`;
+
+        const overlay = document.getElementById('error-overlay');
+        overlay.style.display = 'block';
+      }
+    } catch (e) {
+      console.log('No crash log found or error checking:', e);
+    }
+  }
+
+  // Select all text in element when clicked
+  function selectAllText(element) {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  // Dismiss error overlay and continue
+  async function dismissError() {
+    try {
+      // Delete the crash log so it doesn't show again on next startup
+      const { invoke } = window.__TAURI__.core;
+      await invoke('delete_crash_log');
+    } catch (e) {
+      console.error('Failed to delete crash log:', e);
+    }
+
+    const overlay = document.getElementById('error-overlay');
+    overlay.style.display = 'none';
+
+    // Reload the page to start fresh
+    window.location.reload();
+  }
+
+  // Open GitHub repository
+  async function openGitHub(event) {
+    event.preventDefault();
+    try {
+      const url = 'https://github.com/alejandrade/rustris';
+      if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+        await window.__TAURI__.core.invoke('open_target', {
+          target: { type: 'url', value: url }
+        });
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (e) {
+      console.error('Failed to open GitHub:', e);
+    }
+  }
+
+  // Create a GitHub issue with the error report pre-populated
+  async function createGitHubIssue() {
+    try {
+      // Get the formatted error report
+      const errorReport = await formatErrorReport();
+
+      // Create the issue title from the first error message
+      const firstError = errorData.errors[0];
+      const errorMessage = firstError ? firstError.message : 'Application Error';
+      const title = `Bug Report: ${errorMessage}`;
+
+      // Create the issue body with error report and section for user input
+      const body = `## What were you doing when this happened?
+<!-- Please describe the steps you took before seeing this error -->
+
+
+
+## Error Report
+\`\`\`yaml
+${errorReport}
+\`\`\``;
+
+      // Encode the URL parameters with label
+      const issueUrl = `https://github.com/alejandrade/rustris/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&labels=user-generated`;
+
+      // Open the URL using Tauri's open_target command
+      if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+        await window.__TAURI__.core.invoke('open_target', {
+          target: { type: 'url', value: issueUrl }
+        });
+      } else {
+        // Fallback for browser environment
+        window.open(issueUrl, '_blank');
+      }
+    } catch (e) {
+      console.error('Failed to create GitHub issue:', e);
+      alert('Failed to open GitHub. Please copy the error report and create an issue manually.');
+    }
+  }
+
+  // Check for crash logs after a short delay
+  setTimeout(checkForRustCrash, 500);
+
+  // Timeout check - if React hasn't rendered in 5 seconds
+  setTimeout(() => {
+    const root = document.getElementById('root');
+    if (!root || !root.hasChildNodes()) {
+      const errorInfo = {
+        type: 'Frontend Load Timeout',
+        message: 'The application UI did not render within 5 seconds.'
+      };
+      errorData.errors.push(errorInfo);
+      showError();
+    }
+  }, 5000);
+</script>
+
+<!-- Your normal app entry point -->
+<script type="module" src="/src/main.tsx"></script>
+</body>
 </html>
