@@ -3447,7 +3447,7 @@ dependencies = [
 
 [[package]]
 name = "rustris"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "chrono",
  "diesel",
