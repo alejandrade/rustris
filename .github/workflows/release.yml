@@ -131,29 +131,43 @@ jobs:
           prerelease: false
           generate_release_notes: true
           body: |
-            ## Installation
+            ## 🎮 Rustris v${{ github.event.inputs.version }}
             
-            ### Debian/Ubuntu (x86_64)
-            ```bash
-            sudo dpkg -i Rustris_${{ github.event.inputs.version }}_amd64.deb
-            ```
+            **Rustris** is a modern, user-friendly companion app for **Lutris**. It simplifies the management of Wine and Proton runners, allowing you to easily switch versions, install the latest GE-Proton releases, and manage global settings with a clean interface.
             
-            ### Debian/Ubuntu (ARM64)
+            ### 📥 Quick Download
+            
+            | Platform | Architecture | Installer | Portable |
+            | :--- | :--- | :--- | :--- |
+            | **Ubuntu / Debian** | `x86_64` | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_x86_64.deb) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_x86_64.AppImage) |
+            | **Linux ARM64** | `arm64` | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.deb) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.AppImage) |
+            
+            ---
+            
+            ### 🛠️ Installation & Usage
+            
+            #### Debian / Ubuntu (.deb)
             ```bash
+            # For x86_64 (Standard PC)
+            sudo dpkg -i Rustris_${{ github.event.inputs.version }}_x86_64.deb
+            
+            # For ARM64 (Mac Silicon / Pi)
             sudo dpkg -i Rustris_${{ github.event.inputs.version }}_arm64.deb
             ```
             
-            ### Universal Linux (AppImage)
+            #### Universal Linux (.AppImage)
             ```bash
-            chmod +x Rustris-${{ github.event.inputs.version }}-x86_64.AppImage
-            ./Rustris-${{ github.event.inputs.version }}-x86_64.AppImage
+            chmod +x Rustris_${{ github.event.inputs.version }}_*.AppImage
+            ./Rustris_${{ github.event.inputs.version }}_*.AppImage
             ```
             
-            ## Verification
-            Verify your download with:
+            ### 🛡️ Verification
+            Verify your download using the provided SHA256 checksums:
             ```bash
             sha256sum -c SHA256SUMS.txt
             ```
+            
+            *Note: This project is currently **Work In Progress (WIP)**. Use with caution and report any issues on the GitHub tracker.*
           files: |
             release/*
         env:
