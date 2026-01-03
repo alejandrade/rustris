@@ -10,54 +10,72 @@ on:
 
 jobs:
   build:
-    name: Build ${{ matrix.platform.target }}
+    name: Build ${{ matrix.platform.pretty_name }}
     runs-on: ${{ matrix.platform.os }}
     strategy:
       fail-fast: false
       matrix:
         platform:
-          # x86_64 Linux (GitHub Cloud)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             arch: amd64
-          # ARM64 Linux (Self-hosted)
+            pretty_name: "Linux x64 (Cloud)"
+            is_cloud: true
+
           - os: [self-hosted, arm64, mac]
             target: aarch64-unknown-linux-gnu
             arch: arm64
+            pretty_name: "Linux ARM64 (Mac Studio)"
+            is_cloud: false
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # FIX: Run this on BOTH cloud and self-hosted (if self-hosted is a fresh container)
-      # Or, specifically ensure it runs on ubuntu-latest.
-      - name: Install dependencies (Linux)
+      # --- CLOUD ONLY SETUP ---
+      # These steps are SKIPPED on your Mac Studio because is_cloud is false
+
+      - name: Install System Dependencies
+        if: matrix.platform.is_cloud == true
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libsqlite3-dev
+            build-essential pkg-config libssl-dev libgtk-3-dev \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            patchelf libsqlite3-dev
+
+      - name: Setup Node.js
+        if: matrix.platform.is_cloud == true
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache npm dependencies (Cloud Only)
+        if: matrix.platform.is_cloud == true
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        if: matrix.platform.is_cloud == true
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: ${{ matrix.platform.target }}
+          targets: ${{ matrix.platform.target }}
 
-      # Cache is critical for the Cloud runner (x86_64) to be fast
-      - name: Cache Rust dependencies
+      - name: Rust Cache (Cloud Only)
+        if: matrix.platform.is_cloud == true
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.platform.target }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Install Tauri CLI
+        if: matrix.platform.is_cloud == true
+        run: cargo install tauri-cli --locked
+
+      # --- UNIVERSAL STEPS (Runs on BOTH) ---
 
       - name: Install frontend dependencies
         working-directory: ./frontend
@@ -66,9 +84,6 @@ jobs:
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
-
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2.0.0" --locked
 
       - name: Build Tauri app
         run: |
@@ -79,7 +94,6 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p artifacts
-          # Look for files in the standard Tauri output directory
           find target/${{ matrix.platform.target }}/release/bundle -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} artifacts/ \;
           ls -lh artifacts/
 
@@ -108,7 +122,6 @@ jobs:
       - name: Organize release files
         run: |
           mkdir -p release
-          # Move all downloaded artifacts into one folder for the release
           find release-artifacts -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} release/ \;
           cd release
           sha256sum * > SHA256SUMS.txt
