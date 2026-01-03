@@ -117,13 +117,14 @@ fn main() {
 
     #[cfg(target_os = "linux")]
     {
-        // 1. Disable DMABUF (The #1 cause of crashes on old Intel/NVIDIA)
+        // Force X11 backend (fixes EGL_BAD_PARAMETER on Wayland + AMD/Intel)
+        env::set_var("GDK_BACKEND", "x11");
+
+        // Disable DMABUF (fixes crashes on various GPUs)
         env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
-        // 2. Disable Compositing (Prevents white screens on very old GPUs)
-        // This forces a simpler, more stable rendering path.
+        // Disable Compositing (prevents white screens on older GPUs)
         env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
-
     }
     if !lutris_cli::is_lutris_installed() {
         panic!("Lutris is not installed! This application requires Lutris to run. Please install it from https://lutris.net");
