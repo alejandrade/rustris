@@ -101,6 +101,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: build
+    # Only runs if you typed a version in the manual trigger
     if: github.event.inputs.version != ''
     runs-on: ubuntu-latest
     permissions:
@@ -108,21 +109,52 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
+
       - name: Organize release files
         run: |
           mkdir -p release
           find release-artifacts -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} release/ \;
           cd release
           sha256sum * > SHA256SUMS.txt
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.event.inputs.version }}
           name: Rustris v${{ github.event.inputs.version }}
-          files: release/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Installation
+            
+            ### Debian/Ubuntu (x86_64)
+            ```bash
+            sudo dpkg -i Rustris_${{ github.event.inputs.version }}_amd64.deb
+            ```
+            
+            ### Debian/Ubuntu (ARM64)
+            ```bash
+            sudo dpkg -i Rustris_${{ github.event.inputs.version }}_arm64.deb
+            ```
+            
+            ### Universal Linux (AppImage)
+            ```bash
+            chmod +x Rustris-${{ github.event.inputs.version }}-x86_64.AppImage
+            ./Rustris-${{ github.event.inputs.version }}-x86_64.AppImage
+            ```
+            
+            ## Verification
+            Verify your download with:
+            ```bash
+            sha256sum -c SHA256SUMS.txt
+            ```
+          files: |
+            release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
