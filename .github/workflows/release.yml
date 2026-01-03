@@ -140,7 +140,7 @@ jobs:
             | Architecture | Debian / Ubuntu (.deb) | Fedora / CentOS (.rpm) | Universal Linux (.AppImage) |
             | :--- | :--- | :--- | :--- |
             | **x86_64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_x86_64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris-${{ github.event.inputs.version }}.x86_64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_x86_64.AppImage) |
-            | **ARM64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.deb) | *Not available* | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.AppImage) |
+            | **ARM64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris-${{ github.event.inputs.version }}.aarch64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.AppImage) |
 
             ---
 
@@ -159,6 +159,9 @@ jobs:
             ```bash
             # For x86_64
             sudo dnf install Rustris-${{ github.event.inputs.version }}.x86_64.rpm
+
+            # For ARM64
+            sudo dnf install Rustris-${{ github.event.inputs.version }}.aarch64.rpm
             ```
 
             #### Universal Linux (.AppImage)
