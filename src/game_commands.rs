@@ -95,8 +95,44 @@ pub fn get_game_log(slug: String) -> Result<String, String> {
     }
 }
 
+#[derive(serde::Serialize)]
+struct DiagnosisReport {
+    rustris: AppInfo,
+    contact: ContactInfo,
+    diagnosis: DiagnosisData,
+}
+
+#[derive(serde::Serialize)]
+struct AppInfo {
+    name: String,
+    version: String,
+    description: String,
+}
+
+#[derive(serde::Serialize)]
+struct ContactInfo {
+    note: String,
+    repository: String,
+    reddit: String,
+}
+
+#[derive(serde::Serialize)]
+struct DiagnosisData {
+    game_slug: String,
+    timestamp: String,
+    system_info: serde_json::Value,
+    lutris_configs: LutrisConfigs,
+    // game_log will be manually added to avoid escaped newlines
+}
+
+#[derive(serde::Serialize)]
+struct LutrisConfigs {
+    game_config: Option<serde_yaml::Value>,
+    runner_config: Option<serde_yaml::Value>,
+}
+
 #[tauri::command]
-pub fn save_game_log(slug: String) -> Result<String, String> {
+pub async fn save_game_log(slug: String) -> Result<String, String> {
     use std::io::Write;
 
     // Get system info
@@ -105,62 +141,98 @@ pub fn save_game_log(slug: String) -> Result<String, String> {
     // Get log content from buffer or file
     let log_content = get_game_log(slug.clone()).unwrap_or_else(|_| "No log content available".to_string());
 
-    // Create diagnosis file content
-    let mut diagnosis_content = String::new();
-    diagnosis_content.push_str("=== RUSTRIS DIAGNOSIS REPORT ===\n\n");
+    // Get game data from CLI to find the runner
+    let game_data = lutris_cli::list_games_with_data()
+        .await
+        .ok()
+        .and_then(|games| games.into_iter().find(|g| g.slug == slug));
 
-    diagnosis_content.push_str("=== CONTACT INFORMATION ===\n\n");
-    diagnosis_content.push_str("If you need help, please send this file to:\n");
-    diagnosis_content.push_str("Repository: https://github.com/alejandrade/rustris\n\n");
-    diagnosis_content.push_str("Reddit: https://www.reddit.com/r/Lutris/\n\n");
-
-    diagnosis_content.push_str("Game: ");
-    diagnosis_content.push_str(&slug);
-    diagnosis_content.push_str("\n");
-    diagnosis_content.push_str("Timestamp: ");
-    diagnosis_content.push_str(&chrono::Local::now().to_rfc3339());
-    diagnosis_content.push_str("\n\n");
-
-    diagnosis_content.push_str("=== SYSTEM INFORMATION ===\n\n");
-    diagnosis_content.push_str(&serde_json::to_string_pretty(&system_info).unwrap_or_else(|_| "Failed to serialize system info".to_string()));
-    diagnosis_content.push_str("\n\n");
-    // Get Lutris game config
-    let lutris_config_content = match crate::lutris_db::LutrisDatabase::new() {
+    // Get Lutris configs (game and runner) and parse as YAML
+    let (game_config_content, runner_config_content) = match crate::lutris_db::LutrisDatabase::new() {
         Ok(db) => {
-            match db.get_configpath(&slug) {
+            // Get game config
+            let game_config = match db.get_configpath(&slug) {
                 Ok(configpath) => {
                     match rustris_paths::lutris_game_config(&configpath) {
                         Some(path) if path.exists() => {
                             std::fs::read_to_string(path)
-                                .unwrap_or_else(|e| format!("Failed to read Lutris config: {}", e))
+                                .ok()
+                                .and_then(|s| serde_yaml::from_str(&s).ok())
                         },
-                        _ => "Lutris game config file not found at expected path.".to_string(),
+                        _ => None,
                     }
                 },
-                Err(e) => format!("Could not find configpath for game '{}' in database: {}", slug, e),
-            }
+                Err(_) => None,
+            };
+
+            // Get runner config using runner from game data
+            let runner_config = game_data
+                .as_ref()
+                .and_then(|g| g.runner.as_ref())
+                .and_then(|runner| {
+                    rustris_paths::lutris_runner_config(runner)
+                        .and_then(|path| {
+                            if path.exists() {
+                                std::fs::read_to_string(path)
+                                    .ok()
+                                    .and_then(|s| serde_yaml::from_str(&s).ok())
+                            } else {
+                                None
+                            }
+                        })
+                });
+
+            (game_config, runner_config)
         },
-        Err(e) => format!("Failed to open Lutris database: {}", e),
+        Err(_) => (None, None),
     };
 
-    diagnosis_content.push_str("=== LUTRIS GAME CONFIGURATION ===\n\n");
-    diagnosis_content.push_str(&lutris_config_content);
-    diagnosis_content.push_str("\n\n");
+    // Build the structured report
+    let report = DiagnosisReport {
+        rustris: AppInfo {
+            name: "Rustris".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            description: "A Rust-based Lutris game launcher and manager".to_string(),
+        },
+        contact: ContactInfo {
+            note: "If you need help, please send this file to:".to_string(),
+            repository: "https://github.com/alejandrade/rustris".to_string(),
+            reddit: "https://www.reddit.com/r/Lutris/".to_string(),
+        },
+        diagnosis: DiagnosisData {
+            game_slug: slug.clone(),
+            timestamp: chrono::Local::now().to_rfc3339(),
+            system_info,
+            lutris_configs: LutrisConfigs {
+                game_config: game_config_content,
+                runner_config: runner_config_content,
+            },
+        },
+    };
 
-    diagnosis_content.push_str("=== GAME LOG ===\n\n");
-    diagnosis_content.push_str(&log_content);
+    // Serialize to YAML (without game_log)
+    let mut yaml_content = serde_yaml::to_string(&report)
+        .map_err(|e| format!("Failed to serialize diagnosis report to YAML: {}", e))?;
+
+    // Manually append game_log as a block scalar (with | for literal multiline)
+    yaml_content.push_str("  game_log: |\n");
+    for line in log_content.lines() {
+        yaml_content.push_str("    ");
+        yaml_content.push_str(line);
+        yaml_content.push('\n');
+    }
 
     // Save to Downloads
     let downloads_dir = rustris_paths::downloads_dir()
         .ok_or("Could not find Downloads directory")?;
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let dest_filename = format!("{}_diagnosis_{}.txt", slug, timestamp);
+    let dest_filename = format!("{}_diagnosis_{}.yml", slug, timestamp);
     let dest_path = downloads_dir.join(&dest_filename);
 
     let mut file = std::fs::File::create(&dest_path)
         .map_err(|e| format!("Failed to create diagnosis file: {}", e))?;
 
-    file.write_all(diagnosis_content.as_bytes())
+    file.write_all(yaml_content.as_bytes())
         .map_err(|e| format!("Failed to write diagnosis file: {}", e))?;
 
     Ok(dest_path.to_string_lossy().to_string())

@@ -89,10 +89,17 @@ pub fn rustris_crashes_dir() -> Option<PathBuf> {
 // Specific File Paths
 // ============================================================================
 
+
+/// Get a Lutris runner config file by runner name
+/// Returns: ~/.local/share/lutris/runners/{runner_name}.yml
+pub fn lutris_runner_config(runner_name: &str) -> Option<PathBuf> {
+    lutris_runners_dir().map(|d| d.join(format!("{}.yml", runner_name)))
+}
+
 /// Get the Lutris wine runner config file
 /// Returns: ~/.local/share/lutris/runners/wine.yml
 pub fn lutris_wine_config() -> Option<PathBuf> {
-    lutris_runners_dir().map(|d| d.join("wine.yml"))
+    lutris_runner_config("wine")
 }
 
 /// Get a Lutris game config file by config name
