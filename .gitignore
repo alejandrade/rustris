@@ -26,6 +26,7 @@ out/
 # Claude & LLM Logs
 .claude/
 claude_history.json
+gemini.md
 # Logs
 *.log
 npm-debug.log*
