@@ -44,6 +44,44 @@ pub async fn get_games() -> Result<Vec<GameData>, String> {
 pub async fn launch_game_by_slug(slug: String, window: tauri::Window) -> Result<(), String> {
     println!("Launching game via Lutris: {}", slug);
 
+    // Close Lutris GUI first to prevent it from capturing the debug stream
+    println!("Closing Lutris GUI...");
+
+    // Use sysinfo to find and kill Lutris processes
+    use sysinfo::System;
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    // Kill all Lutris GUI processes
+    for (pid, process) in sys.processes() {
+        let name = process.name().to_string_lossy();
+        if name == "lutris" {
+            println!("Killing Lutris process (PID: {})", pid);
+            process.kill();
+        }
+    }
+
+    // Wait for Lutris to actually close (poll until it's gone)
+    let max_wait = 50; // 5 seconds max
+    for i in 0..max_wait {
+        sys.refresh_all();
+
+        let lutris_running = sys.processes().iter().any(|(_, process)| {
+            process.name().to_string_lossy() == "lutris"
+        });
+
+        if !lutris_running {
+            println!("Lutris GUI closed successfully");
+            break;
+        }
+
+        if i == max_wait - 1 {
+            println!("Warning: Lutris GUI may still be running");
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
     // Get or create buffer for this game
     let log_buffers = get_log_buffers();
     let buffer = log_buffers.get_or_create(&slug);
