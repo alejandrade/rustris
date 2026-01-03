@@ -84,15 +84,6 @@ fn main() {
             // DISABLED: This was causing issues with log streaming
             // init_log_buffer_cleanup();
 
-            // Register Alt+F4 to close the app (Windows convention)
-            let handle = app.handle().clone();
-            app.global_shortcut()
-                .on_shortcut("Alt+F4", move |_app, _shortcut, _event| {
-                    println!("Alt+F4 pressed - closing application");
-                    handle.exit(0);
-                })
-                .unwrap();
-
             // Register Ctrl+Q to close the app (Linux convention)
             let handle = app.handle().clone();
             app.global_shortcut()
