@@ -1,12 +1,9 @@
 name: Rustris Build & Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (leave blank for Test only)'
-        required: false
-        default: ''
+  push:
+    branches:
+      - master
 
 jobs:
   build:
@@ -104,18 +101,30 @@ jobs:
           name: rustris-${{ matrix.platform.arch }}
           path: artifacts/*
 
-  # THIS JOB ONLY RUNS IF YOU ENTERED A VERSION
   release:
     name: Create GitHub Release
     needs: build
-    # Only runs if you typed a version in the manual trigger
-    if: github.event.inputs.version != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract version from Cargo.toml
+        id: version
+        run: |
+          VERSION=$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Delete existing release if it exists
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "v${{ steps.version.outputs.version }}" --yes || true
+          git push origin ":refs/tags/v${{ steps.version.outputs.version }}" || true
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -132,13 +141,13 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: Rustris v${{ github.event.inputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Rustris v${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            ## 🎮 Rustris v${{ github.event.inputs.version }}
+            ## 🎮 Rustris v${{ steps.version.outputs.version }}
             
             **Rustris** is a modern, user-friendly companion app for **Lutris**. It simplifies the management of Wine and Proton runners, allowing you to easily switch versions, install the latest GE-Proton releases, and manage global settings with a clean interface.
             
@@ -146,8 +155,8 @@ jobs:
 
             | Architecture | Debian / Ubuntu (.deb) | Fedora / CentOS (.rpm) | Universal Linux (.AppImage) |
             | :--- | :--- | :--- | :--- |
-            | **x86_64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_x86_64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris-${{ github.event.inputs.version }}.x86_64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_x86_64.AppImage) |
-            | **ARM64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris-${{ github.event.inputs.version }}.aarch64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/Rustris_${{ github.event.inputs.version }}_arm64.AppImage) |
+            | **x86_64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_x86_64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris-${{ steps.version.outputs.version }}.x86_64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_x86_64.AppImage) |
+            | **ARM64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_arm64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris-${{ steps.version.outputs.version }}.aarch64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_arm64.AppImage) |
 
             ---
 
@@ -156,30 +165,30 @@ jobs:
             #### Debian / Ubuntu (.deb)
             ```bash
             # For x86_64 (Standard PC)
-            sudo dpkg -i Rustris_${{ github.event.inputs.version }}_x86_64.deb
-            
+            sudo dpkg -i Rustris_${{ steps.version.outputs.version }}_x86_64.deb
+
             # For ARM64 (Mac Silicon / Pi)
-            sudo dpkg -i Rustris_${{ github.event.inputs.version }}_arm64.deb
+            sudo dpkg -i Rustris_${{ steps.version.outputs.version }}_arm64.deb
             ```
 
             #### Fedora / CentOS (.rpm)
             ```bash
             # For x86_64
-            sudo dnf install Rustris-${{ github.event.inputs.version }}.x86_64.rpm
+            sudo dnf install Rustris-${{ steps.version.outputs.version }}.x86_64.rpm
 
             # For ARM64
-            sudo dnf install Rustris-${{ github.event.inputs.version }}.aarch64.rpm
+            sudo dnf install Rustris-${{ steps.version.outputs.version }}.aarch64.rpm
             ```
 
             #### Universal Linux (.AppImage)
             ```bash
             # For x86_64
-            chmod +x Rustris_${{ github.event.inputs.version }}_x86_64.AppImage
-            ./Rustris_${{ github.event.inputs.version }}_x86_64.AppImage
+            chmod +x Rustris_${{ steps.version.outputs.version }}_x86_64.AppImage
+            ./Rustris_${{ steps.version.outputs.version }}_x86_64.AppImage
 
             # For ARM64
-            chmod +x Rustris_${{ github.event.inputs.version }}_arm64.AppImage
-            ./Rustris_${{ github.event.inputs.version }}_arm64.AppImage
+            chmod +x Rustris_${{ steps.version.outputs.version }}_arm64.AppImage
+            ./Rustris_${{ steps.version.outputs.version }}_arm64.AppImage
             ```
 
             ### 🛡️ Verification

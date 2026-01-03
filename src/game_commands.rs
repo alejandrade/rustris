@@ -2,6 +2,7 @@ use crate::lutris_cli::{self, GameData};
 use crate::rustris_paths;
 use crate::game_log_buffer::LogBufferManager;
 use std::sync::OnceLock;
+use sysinfo::{Pid, System};
 
 /// Global log buffer manager instance (like Lutris's LOG_BUFFERS)
 static LOG_BUFFERS: OnceLock<LogBufferManager> = OnceLock::new();
@@ -48,7 +49,6 @@ pub async fn launch_game_by_slug(slug: String, window: tauri::Window) -> Result<
     println!("Closing Lutris GUI...");
 
     // Use sysinfo to find and kill Lutris processes
-    use sysinfo::System;
     let mut sys = System::new_all();
     sys.refresh_all();
 
@@ -293,52 +293,34 @@ pub struct GameRunningStatus {
 
 #[tauri::command]
 pub async fn check_game_running(slug: String) -> Result<GameRunningStatus, String> {
-    // Check if the game is running by looking for lutris running this specific game
-    use std::process::Command;
-
     println!("Checking if game is running: {}", slug);
 
-    // Check if lutris itself is running this game
-    // This is the most reliable method since Lutris manages the game process
-    let pattern = format!("lutris.*{}", slug);
-    println!("  pgrep pattern: {}", pattern);
+    // Use sysinfo to check for lutris processes running this game
+    let mut sys = System::new_all();
+    sys.refresh_all();
 
-    let lutris_check = Command::new("pgrep")
-        .arg("-f")
-        .arg(&pattern)
-        .output()
-        .map_err(|e| format!("Failed to run pgrep: {}", e))?;
+    let mut matching_pids = Vec::new();
 
-    let is_running = lutris_check.status.success();
-
-    if is_running {
-        let stdout = String::from_utf8_lossy(&lutris_check.stdout);
-        let pids: Vec<String> = stdout
-            .trim()
-            .split('\n')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+    for (pid, process) in sys.processes() {
+        // Check command line for "lutris" and the game slug
+        let cmd = process.cmd();
+        let cmd_string: Vec<String> = cmd.iter()
+            .map(|s| s.to_string_lossy().to_string())
             .collect();
+        let cmd_joined = cmd_string.join(" ");
 
-        println!("  RUNNING - Found {} process(es)", pids.len());
-
-        // Show the actual command lines of matched processes
-        for pid in &pids {
-            if let Ok(output) = Command::new("ps")
-                .arg("-p")
-                .arg(pid)
-                .arg("-o")
-                .arg("cmd=")
-                .output()
-            {
-                let cmd = String::from_utf8_lossy(&output.stdout);
-                println!("    PID {}: {}", pid, cmd.trim());
-            }
+        if cmd_joined.contains("lutris") && cmd_joined.contains(&slug) {
+            let pid_string = pid.to_string();
+            println!("  Found process - PID {}: {}", pid_string, cmd_joined);
+            matching_pids.push(pid_string);
         }
+    }
 
+    if !matching_pids.is_empty() {
+        println!("  RUNNING - Found {} process(es)", matching_pids.len());
         Ok(GameRunningStatus {
             is_running: true,
-            pids,
+            pids: matching_pids,
         })
     } else {
         println!("  NOT RUNNING - No matching processes");
@@ -351,41 +333,29 @@ pub async fn check_game_running(slug: String) -> Result<GameRunningStatus, Strin
 
 #[tauri::command]
 pub fn force_close_game(pids: Vec<String>) -> Result<(), String> {
-    use std::process::Command;
-
     println!("Force closing game processes: {:?}", pids);
 
-    for pid in pids {
-        println!("  Killing PID: {}", pid);
+    let mut sys = System::new_all();
+    sys.refresh_all();
 
-        // Try SIGTERM first (graceful)
-        let result = Command::new("kill")
-            .arg(&pid)
-            .output();
+    for pid_string in pids {
+        println!("  Killing PID: {}", pid_string);
 
-        match result {
-            Ok(output) if output.status.success() => {
-                println!("    Successfully sent SIGTERM to PID {}", pid);
-            }
-            Ok(_) => {
-                // If SIGTERM failed, try SIGKILL (force)
-                println!("    SIGTERM failed, trying SIGKILL for PID {}", pid);
-                let kill_result = Command::new("kill")
-                    .arg("-9")
-                    .arg(&pid)
-                    .output();
+        // Parse PID string to sysinfo Pid
+        if let Ok(pid_num) = pid_string.parse::<usize>() {
+            let pid = Pid::from_u32(pid_num as u32);
 
-                if let Ok(output) = kill_result {
-                    if output.status.success() {
-                        println!("    Successfully sent SIGKILL to PID {}", pid);
-                    } else {
-                        println!("    Failed to kill PID {}", pid);
-                    }
+            if let Some(process) = sys.process(pid) {
+                if process.kill() {
+                    println!("    Successfully killed PID {}", pid_string);
+                } else {
+                    println!("    Failed to kill PID {}", pid_string);
                 }
+            } else {
+                println!("    Process {} not found", pid_string);
             }
-            Err(e) => {
-                println!("    Error killing PID {}: {}", pid, e);
-            }
+        } else {
+            println!("    Invalid PID: {}", pid_string);
         }
     }
 
