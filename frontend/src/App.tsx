@@ -142,7 +142,9 @@ function App() {
     return (
       <ThemeProvider theme={darkTheme}>
         <CssBaseline />
-        <InitialSetup onComplete={handleSetupComplete} />
+        <GameProvider>
+          <InitialSetup onComplete={handleSetupComplete} />
+        </GameProvider>
       </ThemeProvider>
     );
   }
