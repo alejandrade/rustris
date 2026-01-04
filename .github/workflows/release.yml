@@ -111,10 +111,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Extract version from Cargo.toml
+      - name: Extract version from tauri.conf.json
         id: version
         run: |
-          VERSION=$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)
+          VERSION=$(grep -m1 '"version":' tauri.conf.json | cut -d '"' -f4)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
@@ -155,8 +155,8 @@ jobs:
 
             | Architecture | Debian / Ubuntu (.deb) | Fedora / CentOS (.rpm) | Universal Linux (.AppImage) |
             | :--- | :--- | :--- | :--- |
-            | **x86_64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_x86_64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris-${{ steps.version.outputs.version }}.x86_64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_x86_64.AppImage) |
-            | **ARM64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_arm64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris-${{ steps.version.outputs.version }}.aarch64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_arm64.AppImage) |
+            | **x86_64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_amd64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris-${{ steps.version.outputs.version }}-1.x86_64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_amd64.AppImage) |
+            | **ARM64** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_arm64.deb) | [Download .rpm](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris-${{ steps.version.outputs.version }}-1.aarch64.rpm) | [Download .AppImage](https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/Rustris_${{ steps.version.outputs.version }}_aarch64.AppImage) |
 
             ---
 
@@ -165,7 +165,7 @@ jobs:
             #### Debian / Ubuntu (.deb)
             ```bash
             # For x86_64 (Standard PC)
-            sudo dpkg -i Rustris_${{ steps.version.outputs.version }}_x86_64.deb
+            sudo dpkg -i Rustris_${{ steps.version.outputs.version }}_amd64.deb
 
             # For ARM64 (Mac Silicon / Pi)
             sudo dpkg -i Rustris_${{ steps.version.outputs.version }}_arm64.deb
@@ -174,21 +174,21 @@ jobs:
             #### Fedora / CentOS (.rpm)
             ```bash
             # For x86_64
-            sudo dnf install Rustris-${{ steps.version.outputs.version }}.x86_64.rpm
+            sudo dnf install Rustris-${{ steps.version.outputs.version }}-1.x86_64.rpm
 
             # For ARM64
-            sudo dnf install Rustris-${{ steps.version.outputs.version }}.aarch64.rpm
+            sudo dnf install Rustris-${{ steps.version.outputs.version }}-1.aarch64.rpm
             ```
 
             #### Universal Linux (.AppImage)
             ```bash
             # For x86_64
-            chmod +x Rustris_${{ steps.version.outputs.version }}_x86_64.AppImage
-            ./Rustris_${{ steps.version.outputs.version }}_x86_64.AppImage
+            chmod +x Rustris_${{ steps.version.outputs.version }}_amd64.AppImage
+            ./Rustris_${{ steps.version.outputs.version }}_amd64.AppImage
 
             # For ARM64
-            chmod +x Rustris_${{ steps.version.outputs.version }}_arm64.AppImage
-            ./Rustris_${{ steps.version.outputs.version }}_arm64.AppImage
+            chmod +x Rustris_${{ steps.version.outputs.version }}_aarch64.AppImage
+            ./Rustris_${{ steps.version.outputs.version }}_aarch64.AppImage
             ```
 
             ### 🛡️ Verification
